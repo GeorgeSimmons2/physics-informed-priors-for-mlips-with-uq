@@ -40,10 +40,14 @@ route() {
     local E="OUT=$O,ACE_MODELS=$AM,MODEL_FILE=$MF"
     local T='-t $SLURM_NTASKS'
     # Al_12: in sequence — 01 builds the 4×4×4 undotted Hessian cache the next three read
-    local c1 c2 c3 c4 c5 d1 d2 f4 r1 n1 n2 f2 m1 m2 p1 p2 p3 p4
+    local c1 c2 c3 c3n c4 c5 d1 d2 f4 r1 n1 n2 f2 m1 m2 p1 p2 p3 p4
     c1=$(sub "${N}_al12_01" "$AD" "$PART" 20 3988 06:00:00 "$E" "$JL $T al12/01_committee.jl")
     c2=$(sub "${N}_al12_02" "$c1" "$PART" 42 3988 04:00:00 "$E" "$JL $T al12/02_cutting_plane_cloud.jl")
     c3=$(sub "${N}_al12_03" "$c2" "$PART" 8 12000 04:00:00 "$E" "$JL $T al12/03_hypercube_rejection.jl")
+    # verify's yardstick for the committees' test coverage: al12/03 again with 600 members (its first 30 are the
+    # committee above), scored as 20 disjoint 30-member committees
+    c3n=$(sub "${N}_al12_03_noise" "$c3" "$PART" 8 12000 02:00:00 "$E,OUTDIR=$O/al12/hypercube_noise" \
+          "$JL $T al12/03_hypercube_rejection.jl 600 20 && $JL verify/coverage_noise.jl $O/al12/hypercube_noise/parity_calibration_predictions.jls data/Al/manual_df_test_Al.xyz $O/al12/hypercube_noise/coverage_noise.csv")
     c4=$(sub "${N}_al12_04" "$c3" "$PART" 40 3988 08:00:00 "$E" "$JL $T al12/04_naive_ensemble.jl")
     # Al_16
     d1=$(sub "${N}_al16_01" "$AD" "$PART" 40 3988 06:00:00 "$E,BUILD_THREADS=16" "$JL $T al16/01_pinned_ensembles.jl")
@@ -71,7 +75,7 @@ route() {
     p3=$(sub "${N}_pops_sample" "$p2" "$PART" 4 2000 02:00:00 "$ME" "$JL mace/pops/p3_sample.jl")
     p4=$(sub "${N}_pops_eval" "$p3" "$PART" 16 2000 06:00:00 "$ME" \
          "$PY mace/pops/p4_evaluate.py && $PY mace/pops/p5_figures.py && $PY mace/pops/p6_maxdev_vs_error.py")
-    echo "$N: Al_12 $c1→$c2→$c3→$c4→$c5 | Al_16 $d1→$d2 | four-panel $f4 | RLS $r1, NPT $n1 $n2 → fig $f2"
+    echo "$N: Al_12 $c1→$c2→$c3(+noise $c3n)→$c4→$c5 | Al_16 $d1→$d2 | four-panel $f4 | RLS $r1, NPT $n1 $n2 → fig $f2"
     echo "$N: MACE $m1→$m2 | POPS $p1→$p2→$p3→$p4      logs: $LOG/"
 }
 

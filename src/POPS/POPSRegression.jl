@@ -6,7 +6,9 @@ export corrections, hypercube, sample_hypercube, rejection_sample_hypercube
 function corrections(X::AbstractMatrix{Float64}, Y::Vector{Float64}, Gamma::AbstractMatrix{Float64}; leverage_percentile::Float64 = 0.5, lambda::Float64 = 1.0 / size(X,1), coeffs=nothing)
     C      = (Gamma' * Gamma .* lambda .+ X' * X)
     A      = C \ X'
-    leverage = diag(X * A)
+    # [PORT] was diag(X * A), which forms the full n×n product to read its diagonal (146,958² doubles = 173 GB
+    # for Al_12); the row-wise dot products are the same leverages (to summation-order round-off) in O(n·p).
+    leverage = vec(sum(X .* A'; dims=2))
     if (coeffs == nothing)
         coeffs = C \ (X' * Y)
     end

@@ -47,25 +47,51 @@ if route == "refit"
 end
 
 # ── Al_12: committee, cloud, hypercube, naive ensemble ───────────────────────
-push!(checks, check_vector("Al_12 constrained mean θ_mean", :converged, "$P/al12/committee/theta_mean.csv", "$O/al12/committee/theta_mean.csv"))
+# θ_mean: judged on its predictions at the method's own precision (verify/mean_qp.jl), with the route's models
+ENV["ACE_MODELS"] = route == "refit" ? "$O/models" : "$R/models"
+include(joinpath(@__DIR__, "mean_qp.jl"))
+push!(checks, check_mean_qp("Al_12 constrained mean θ_mean (what it predicts)", "$P/al12/committee/theta_mean.csv", "$O/al12/committee/theta_mean.csv"))
 push!(checks, check_ensemble("Al_12 30-member repaired forest", :statistical, "$P/al12/committee/committee_repaired.csv", "$O/al12/committee/committee_repaired.csv"))
-push!(checks, check_distribution("Al_12 cloud: min ω per member (THz)", :statistical, "$P/al12/cloud/member_diagnostics.csv",
-                                 "$O/al12/cloud/member_diagnostics.csv"; col=5, skipstart=2, unit="THz"))
-push!(checks, check_distribution("Al_12 cloud: cuts per member", :statistical, "$P/al12/cloud/member_diagnostics.csv",
-                                 "$O/al12/cloud/member_diagnostics.csv"; col=3, skipstart=2))
+# The cloud has one member per top-leverage observation, so the two runs pair member by member, and each member
+# is its own cutting-plane cascade: most agree exactly, a few end on different cuts.  The distribution is compared
+# on robust quantiles at the statistical tier's 1% of its scale (the min and max of 73,479 members are single
+# members, which a cascade ending on a different cut moves), and the member-by-member agreement is reported.
+function check_cloud(label, col, published, reproduced; unit="")
+    isfile(reproduced) || return Check(label, :statistical, :missing, "not produced yet: $reproduced")
+    A, B = readdlm(published, ','; skipstart=2), readdlm(reproduced, ','; skipstart=2)
+    size(A) == size(B) && A[:, 2] == B[:, 2] || return Check(label, :statistical, :fail, "the members are not the same observations")
+    a, b = Float64.(A[:, col]), Float64.(B[:, col]); qs = [0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99]
+    qa, qb = quantile(a, qs), quantile(b, qs); d = maximum(abs.(qa .- qb)) / max(maximum(abs, a), eps())
+    Check(label, :statistical, d <= TIER_TOL[:statistical] ? :ok : :fail,
+          @sprintf("n=%d  quantiles 1/50/99%% %s→%s %s (max rel Δ over 1–99%% %.4f, tol %.3f); members identical %.1f%%, max|Δ| %.3g",
+                   length(a), join(round.(qa[[1,4,7]]; sigdigits=4), "/"), join(round.(qb[[1,4,7]]; sigdigits=4), "/"), unit,
+                   d, TIER_TOL[:statistical], 100*mean(a .== b), maximum(abs.(a .- b))))
+end
+push!(checks, check_cloud("Al_12 cloud: min ω per member (THz)", 5, "$P/al12/cloud/member_diagnostics.csv", "$O/al12/cloud/member_diagnostics.csv"; unit="THz"))
+push!(checks, check_cloud("Al_12 cloud: cuts per member", 3, "$P/al12/cloud/member_diagnostics.csv", "$O/al12/cloud/member_diagnostics.csv"))
 push!(checks, check_ensemble("Al_12 constrained committee (full-cloud hypercube)", :statistical,
                              "$P/al12/hypercube/committee_rejection_full_cloud.csv", "$O/al12/hypercube/committee_rejection_full_cloud.csv"))
-let a = "$P/al12/hypercube/hypercube_summary.csv", b = "$O/al12/hypercube/hypercube_summary.csv"
+# Coverage is that of ONE 30-member committee's envelope, so it moves from draw to draw: the yardstick is its
+# standard deviation over 20 disjoint 30-member committees from the same box (al12/hypercube_noise, written by
+# run.sh with verify/coverage_noise.jl), at the same Z_TOL as the committees: |Δ| ≤ Z_TOL·√2·sd.
+let a = "$P/al12/hypercube/hypercube_summary.csv", b = "$O/al12/hypercube/hypercube_summary.csv",
+    nz = "$O/al12/hypercube_noise/coverage_noise.csv"
     if isfile(b)
         A, B = readdlm(a, ','; header=true)[1], readdlm(b, ','; header=true)[1]
+        sd = isfile(nz) ? (N = readdlm(nz, ','; header=true)[1]; Dict((string(N[k,1]), string(N[k,2])) => Float64(N[k,5]) for k in axes(N,1))) : nothing
         for (i, nm) in enumerate(A[:, 1])
-            # directions, acceptance %, E and F coverage %: same box statistics, so agreement to a few %
-            vals(M) = Float64[M[i, 3], M[i, 6], M[i, 7], M[i, 8]]
+            vals(M) = Float64[M[i, 3], M[i, 6], M[i, 7], M[i, 8]]      # directions, acceptance %, E and F coverage %
             va, vb = vals(A), vals(B)
-            ok = abs(va[1] - vb[1]) <= 2 && all(abs.(va[3:4] .- vb[3:4]) .<= 2.0)
+            line = @sprintf("directions %d→%d, acceptance %.3f→%.3f %%, coverage E %.1f→%.1f %%, F %.1f→%.1f %%",
+                            va[1], vb[1], va[2], vb[2], va[3], vb[3], va[4], vb[4])
+            if sd === nothing
+                push!(checks, Check("Al_12 hypercube summary ($nm)", :statistical, :missing, line * "; coverage noise not produced yet: $nz"))
+                continue
+            end
+            zE = abs(va[3] - vb[3]) / (sqrt(2) * sd[(string(nm), "E")]); zF = abs(va[4] - vb[4]) / (sqrt(2) * sd[(string(nm), "F")])
+            ok = abs(va[1] - vb[1]) <= 2 && max(zE, zF) <= Z_TOL
             push!(checks, Check("Al_12 hypercube summary ($nm)", :statistical, ok ? :ok : :fail,
-                @sprintf("directions %d→%d, acceptance %.3f→%.3f %%, coverage E %.1f→%.1f %%, F %.1f→%.1f %%",
-                         va[1], vb[1], va[2], vb[2], va[3], vb[3], va[4], vb[4])))
+                line * @sprintf("; coverage z = %.2f (E, draw-to-draw sd %.2f), %.2f (F, sd %.2f)", zE, sd[(string(nm), "E")], zF, sd[(string(nm), "F")])))
         end
     else
         push!(checks, Check("Al_12 hypercube summary", :statistical, :missing, "not produced yet: $b"))
@@ -107,7 +133,7 @@ end
 # still_fcc, ⟨coord⟩ well below 12) with a negative min ω at its a(200 K); that a(200 K) belongs to a broken
 # structure, so it is reported, not compared.  Constrained RLS must stay FCC with a(200 K) within 3
 # fluctuation σ of the published value.  Trajectories are not compared: Molly sums forces over threads.
-push!(checks, check_vector("constrained RLS θ", :converged, "$P/rls_npt/constrained/theta_rls_constrained.csv", "$O/rls_npt/constrained/theta_rls_constrained.csv"))
+push!(checks, check_predictions("constrained RLS θ (what it predicts)", "$P/rls_npt/constrained/theta_rls_constrained.csv", "$O/rls_npt/constrained/theta_rls_constrained.csv"))
 for m in ("rls", "constrained")
     a, b = "$P/rls_npt/npt/$m/T200K/summary_row.csv", "$O/rls_npt/npt/$m/T200K/summary_row.csv"
     if isfile(b)
