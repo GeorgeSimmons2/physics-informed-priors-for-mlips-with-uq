@@ -1,0 +1,3 @@
+MACE         a0 4.0523 Å   C11  110.8   C12   56.3   C44   29.9 GPa   (fit error ≤ 0.24 GPa)
+constrained  a0 4.0320 Å   C11  116.4   C12   64.7   C44   30.9 GPa   (fit error ≤ 0.33 GPa)
+target       a0 4.0320 Å   C11  116.3   C12   64.8   C44   30.9 GPa

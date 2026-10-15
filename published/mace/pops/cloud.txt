@@ -1,0 +1,5 @@
+POPS clouds of the elastic-constrained MACE readout (p2_cloud.jl)
+rows: 1579 energies + 27930 force components; leverage percentile 0.5 → 14755 kept (1579 E, 13176 F)
+constrained: 14755 / 14755 Solved, all inside the ±0.1% windows: true; max interpolation residual 2.291500322826323e-13
+unconstrained: 14755 closed-form members about θ0 (MACE as trained); for reference ‖S(θ_LS − θ0)‖ = 2.0817792736394227
+mean-model check: ‖z‖ = 1.706982847831591e-5

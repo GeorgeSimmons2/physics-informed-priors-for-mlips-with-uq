@@ -1,0 +1,8 @@
+# NPT 4x4x4 (256 atoms), 0 Pa, T = 200 K, Langevin + MC barostat, dt 1 fs, 10k equil + 20k prod, seed 1234 (both)
+# a_200K = mean cube-root(V)/4 over production frames; RDF over the same frames (200 bins, per-frame box)
+# phonons: 4x4x4 force constants at each model's own a_200K, N_per_seg 20,20,20,20,60; min_omega excludes |q| < 0.05
+# bands x_plot: the constrained model's path coordinate; RLS's (|q| scales as 1/a) rescaled onto it, exact since all segments scale equally
+# RLS left FCC at 200 K: its a_200K is cube-root(V)/4 of a transformed cell, not an FCC lattice constant
+model,a0_Ang,a_200K_Ang,a_200K_std_Ang,expansion_pct,mean_coord,still_fcc,min_omega_THz,theta_file
+RLS,4.044936,4.242527,0.006983,4.885,9.4644,false,-4.0636,../npt/rls/theta_used.csv
+constrained RLS,4.044936,4.084205,0.004808,0.971,11.9968,true,0.2346,../npt/constrained/theta_used.csv

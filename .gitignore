@@ -1,0 +1,11 @@
+# environments (run.sh setup)
+.venv/
+.julia/
+# reproduction output (run.sh replot | saved | refit)
+repro/
+# tier B: linked in by run.sh data, checked against data/tierB.sha256
+data/Al/
+models/*/A.csv
+# Hessian caches, rebuilt on demand beside each model
+models/*/cache/
+__pycache__/

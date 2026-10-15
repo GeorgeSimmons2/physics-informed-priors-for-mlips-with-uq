@@ -1,0 +1,6 @@
+largest deviation of the 100 members from each committee's reference model toward DFT, on 3000 test frames and 53196 force components (energies meV/atom, forces meV/Å)
+               q   RMSE ref  median dev  |err| ≤ max dev
+constrained    E      13.65       20.32            0.929
+constrained    F      52.75       50.30            0.875
+unconstrained  E      12.03       19.48            0.966
+unconstrained  F      50.64       49.84            0.891
