@@ -1,4 +1,24 @@
-# al16/02_bands.jl — the Al_16 band curves of both ensembles (bottom row of the four-panel figure).
+# [PORT] constrained-pops-repro al16/02_bands.jl: a verbatim copy of constrained_optimization/al16/02_bands_two_ensembles.jl from
+#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
+#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
+# ─────────────────────────────────────────────────────────────────────────────
+# PINNED REPRODUCTION COPY of scripts/qoi/bands_two_ensembles_Al_16_4_6A_3.jl
+#
+# Stage 2 of the pair behind the BOTTOM ROW of bands_four_panel/: per-member geometry
+# optimisation, an independent native Hessian each, and the serialised band curves the
+# four-panel figure actually reads.  Differences from the original are marked `# [REPRO]`
+# and tabulated in ../README.md.  No physics, Hessian or plotting change.
+#
+# Reads stage 1's repro_ output by default and writes beside it, so the published
+# bands_two_ensembles.jls is never overwritten.  It then compares its own per-member
+# (relaxed a, min ω) against the published bands_{un,}constrained.csv — which is the
+# test of whether stage 1's pinned defaults actually recovered the published ensembles.
+# ─────────────────────────────────────────────────────────────────────────────
+# bands_two_ensembles_Al_16_4_6A_3.jl
+#
+# STAGE 2 of three.  Phonon bands of the two ensembles from
+# scripts/uq/pinned_rejection_ensembles_Al_16_4_6A_3.jl, side by side on ONE shared
+# frequency axis.
 #
 # Every member gets an INDEPENDENT geometry optimisation and its OWN native Hessian.
 # Stage 1 screened proposals with a single undotted Hessian at a_eq, which is exact
@@ -17,15 +37,10 @@
 # set_linear_parameters! mutates, so a shared model is a data race giving quietly wrong
 # bands rather than a crash.  Chunked @spawn, not @threads with threadid().
 #
-# Ported from constrained_optimization/al16/02_bands_two_ensembles.jl of the physics-informed-
-# priors repository; its own figure (superseded by four_panel/) is dropped, and its comparison
-# with the published members moved to verify.jl.
-#
-# In:  $OUT/al16/ensembles/{ensemble_unconstrained,ensemble_constrained}.csv, pinned_ensembles.jls
-# Out: $OUT/al16/bands/{bands_two_ensembles.jls, bands_unconstrained.csv, bands_constrained.csv}
-# Run: julia --project -t 40 al16/02_bands.jl     Env: OUT, ACE_MODELS, N_CELL (4), N_PER_SEG, UNSTABLE (-0.05), QOI_THREADS
+# Run:  julia --project -t 40 scripts/qoi/bands_two_ensembles_Al_16_4_6A_3.jl
+#   N_CELL=4  N_PER_SEG=20  UNSTABLE=-0.05  QOI_THREADS=<n>  FIGW=540
 
-include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))
+include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))  # [PORT] lib/bandpath.jl
 using Serialization
 
 element     = :Al
@@ -37,11 +52,17 @@ N_PER_SEG   = haskey(ENV, "N_PER_SEG") ? parse(Int, ENV["N_PER_SEG"]) :
 UNSTABLE    = parse(Float64, get(ENV, "UNSTABLE", "-0.05"))
 qΓtol       = 5e-2
 QOI_THREADS = parse(Int,     get(ENV, "QOI_THREADS", string(Threads.nthreads())))
+FIGW        = parse(Float64, get(ENV, "FIGW", "540"))
 
-OUT      = get(ENV, "OUT", joinpath(@__DIR__, "..", "repro", "saved"))
-MODELDIR = model_dir("Al_16_4_6A_3_")                   # honours ACE_MODELS (the refit route)
-SRC      = "$OUT/al16/ensembles"
-outdir   = "$OUT/al16/bands"; mkpath(outdir)
+ROOT     = normpath(joinpath(@__DIR__, "..", ".."))       # [REPRO] repo root, not the cwd
+MODELDIR = model_dir("Al_16_4_6A_3_")   # [PORT] honours ACE_MODELS (the refit route's models)
+ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  # [PORT] the route root (run.sh sets OUT)
+SRC      = get(ENV, "SRC", "$ROUT/al16/ensembles")   # [PORT] was $MODELDIR/results/repro_pinned_ensembles
+PUBLISHED = get(ENV, "PUBLISHED", "$ROOT/published/al16/bands")   # [PORT] was $MODELDIR/results/pinned_ensembles
+outdir   = get(ENV, "OUTDIR", "$ROUT/al16/bands"); mkpath(outdir)   # [PORT] was SRC
+
+BLU = RGBf(0.0,0.447,0.698); GRY = RGBAf(0.45,0.45,0.45,0.35); RED = RGBAf(0.80,0.15,0.15,0.75)
+TITLE, LAB, TICK = 13, 12, 11
 
 # ── model (fast load: nothing here needs the 1.9 GB A.csv) ──────────────────
 model, _ = ACEpotentials.load_model("$MODELDIR/Al_16_4_6A_3.json")
@@ -52,13 +73,15 @@ n_params = length(lin_params)
 
 function read_ens(tag)
     f = "$SRC/ensemble_$(tag).csv"
-    isfile(f) || error("missing $f — run al16/01_pinned_ensembles.jl first")
+    isfile(f) || error("missing $f — run scripts/uq/pinned_rejection_ensembles_Al_16_4_6A_3.jl first")
     M = readdlm(f, ',')
     size(M, 2) == n_params || error("$f is $(size(M,2)) wide, model has $n_params")
     return [collect(Float64, M[i, :]) for i in 1:size(M, 1)]
 end
-ens = [(tag = "unconstrained", label = "unconstrained (pinned, no predicate)", mem = read_ens("unconstrained")),
-       (tag = "constrained",   label = "constrained (phonon-positive)",        mem = read_ens("constrained"))]
+ens = [(tag = "unconstrained", label = "unconstrained (pinned, no predicate)", col = RED,
+        mem = read_ens("unconstrained")),
+       (tag = "constrained",   label = "constrained (phonon-positive)",        col = BLU,
+        mem = read_ens("constrained"))]
 for e in ens; @printf("%-14s %d members\n", e.tag, length(e.mem)); end
 structure = AtomsBuilder.Chemistry.symmetry(element)
 flush(stdout)
@@ -131,10 +154,42 @@ let wu = [b.minω for b in res[1]], wc = [b.minω for b in res[2]]
 end
 flush(stdout)
 
-# ── one shared frequency axis over both ensembles (the four-panel row's y-range) ──
+# ── figure: one shared frequency axis ───────────────────────────────────────
 allF = vcat([b.F for r in res for b in r], [mean_b.F])
 lo = minimum(minimum.(allF)); hi = maximum(maximum.(allF)); pad = 0.06*(hi-lo)
 ylim = (min(lo-pad, -0.5), hi+pad)
+xref = mean_b.x_vals; xt = mean_b.x_ticks; lbl = mean_b.labels; Np = mean_b.Np
+@printf("\nshared frequency axis: [%.2f, %.2f] THz\n", ylim...)
+
+function panel!(gp, bs, ttl; showy=true)
+    soft = [b.minω < UNSTABLE for b in bs]
+    ax = Axis(gp; xlabel="Wave vector", ylabel = showy ? "Frequency (THz)" : "",
+              title=ttl, titlesize=TITLE, xlabelsize=LAB, ylabelsize=LAB,
+              xticklabelsize=TICK, yticklabelsize=TICK, xticks=(xt, lbl),
+              xgridvisible=false, ygridvisible=false, xtickalign=1, ytickalign=1,
+              xticksize=4, yticksize=4)
+    band!(ax, [first(xref), last(xref)], [ylim[1], ylim[1]], [0.0, 0.0];
+          color=(RGBf(0.8,0.15,0.15), 0.06))
+    for (i, b) in enumerate(bs), br in 1:3Np
+        lines!(ax, xref, b.F[br, :]; color = soft[i] ? RED : GRY,
+               linewidth = soft[i] ? 1.0 : 0.7)
+    end
+    for br in 1:3Np; lines!(ax, xref, mean_b.F[br, :]; color=BLU, linewidth=1.8); end
+    hlines!(ax, [0.0]; color=:black, linestyle=:dash, linewidth=1.0)
+    vlines!(ax, xt; color=(:black,0.22), linewidth=0.7)
+    xlims!(ax, first(xref), last(xref)); ylims!(ax, ylim...)
+    showy || hideydecorations!(ax; grid=false, ticks=false, minorticks=false)
+    text!(ax, 0.97, 0.03; text="$(count(soft))/$(length(soft)) unstable", space=:relative,
+          align=(:right,:bottom), fontsize=TICK-1, color=:gray30)
+end
+
+fig = Figure(size=(FIGW, 0.42FIGW), figure_padding=(6, 10, 4, 6))
+panel!(fig[1,1], res[1], ens[1].label)
+panel!(fig[1,2], res[2], ens[2].label; showy=false)
+colgap!(fig.layout, 20)
+save("$outdir/bands_two_ensembles.pdf", fig)
+save("$outdir/bands_two_ensembles.png", fig; px_per_unit=4)
+
 for (k, e) in enumerate(ens)
     writedlm("$outdir/bands_$(e.tag).csv",
              hcat(1:length(res[k]), [b.a for b in res[k]], [b.minω for b in res[k]]), ',')
@@ -142,4 +197,35 @@ end
 serialize("$outdir/bands_two_ensembles.jls",
           (; res, mean_b, ylim, N_CELL, N_PER_SEG, UNSTABLE,
              tags = [e.tag for e in ens]))
-println("\ndata → $outdir/bands_{unconstrained,constrained}.csv  (member, relaxed a, min ω), bands_two_ensembles.jls")
+println("\nfigure → $outdir/bands_two_ensembles.{pdf,png}")
+println("data   → $outdir/bands_{unconstrained,constrained}.csv  (member, relaxed a, min ω)")
+
+# ── [REPRO] did stage 1 recover the published ensembles? ─────────────────────
+# The published run's per-member (relaxed a, min ω) survived in bands_{tag}.csv even
+# though its ensemble_*.csv were overwritten.  Two members with the same θ relax to the
+# same a and give the same min ω, so agreement here to solver tolerance means the
+# ensembles match; a scatter means stage 1 drew a different sample.
+println("\n══ [REPRO] vs the published ensembles ═══════════════════════════")
+for (k, e) in enumerate(ens)
+    ref = "$PUBLISHED/bands_$(e.tag).csv"
+    if !isfile(ref)
+        @printf("%-14s no published reference at %s\n", e.tag, ref); continue
+    end
+    pub = readdlm(ref, ',')
+    a_r = [b.a for b in res[k]]; w_r = [b.minω for b in res[k]]
+    if size(pub, 1) != length(a_r)
+        @printf("%-14s MEMBER COUNT DIFFERS: published %d, this run %d — rerun stage 1 with N_MEMBERS=%d\n",
+                e.tag, size(pub, 1), length(a_r), size(pub, 1))
+        continue
+    end
+    da = maximum(abs.(vec(pub[:, 2]) .- a_r))
+    dw = maximum(abs.(vec(pub[:, 3]) .- w_r))
+    soft_p = findall(<(UNSTABLE), vec(pub[:, 3])); soft_r = findall(<(UNSTABLE), w_r)
+    @printf("%-14s max|Δa| = %.3e Å   max|Δminω| = %.3e THz   soft %s → %s  %s\n",
+            e.tag, da, dw, string(soft_p), string(soft_r),
+            (dw < 1e-6 && soft_p == soft_r) ? "✓ REPRODUCED" :
+            (soft_p == soft_r)              ? "~ same members, solver-level drift" :
+                                              "✗ DIFFERENT MEMBERS")
+end
+println("  (member order is the draw order, so this is an element-wise comparison, not a")
+println("   set comparison — a permutation would show up as a scatter.)")

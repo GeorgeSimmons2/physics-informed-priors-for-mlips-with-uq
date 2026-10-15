@@ -1,47 +1,80 @@
-# al12/01_committee.jl — the constrained mean model θ_mean and the 30-member repaired forest.
+# [PORT] constrained-pops-repro al12/01_committee.jl: a verbatim copy of constrained_optimization/al12/01_committee_ncell4_densek.jl from
+#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
+#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
+# ─────────────────────────────────────────────────────────────────────────────
+# PINNED REPRODUCTION COPY of scripts/uq/bandpath_committee_undotted_Al_12_4_6A_2_ncell4_densek.jl
 #
-# Al_12_4_6A_2_, phonons on the UNDOTTED per-basis Hessian at a_eq (4×4×4 cell, dense Γ→K):
-#   1. constrain a_eq: the mean fit with b′·θ = 0, Born stability, and cutting-plane rows until
-#      every band-path frequency is ≥ cut_margin (the mean must obey the committee's constraints)
-#   2. a 30-member POPS forest (5 top-leverage, 10 top-residual, 15 random observations), each
-#      member re-solved with its interpolation equality, b′·θ = 0 and Born, then cut until stable
-# Stages 03 (the 30-member hypercube) and 04 (the constrained centre) read both outputs.
+# Stage 1 of the Al_12 chain behind the TOP ROW of bands_four_panel/.  It produces
+# theta_mean.csv (the constrained mean model) and committee_repaired.csv (the 30-member
+# forest) — BOTH of which stages 3 and 4 read, which is why it runs first despite being
+# the cheapest.
 #
-# Ported from constrained_optimization/al12/01_committee_ncell4_densek.jl of the
-# physics-informed-priors repository; the rejection-sampled 30-member committee, its band plots
-# and test-set coverage, which nothing downstream reads, are dropped.
+# Differences from the original are marked `# [REPRO]` and tabulated in ../README.md:
+# the include path, a pinned OSQP rho schedule, and an overridable repro_ output
+# directory.  No constraint, sampler or physics change.
+# ─────────────────────────────────────────────────────────────────────────────
+# bandpath_committee_undotted_Al_12_4_6A_2_ncell4_densek.jl
 #
-# Out: $OUT/al12/committee/{theta_mean.csv, committee_repaired.csv}
-# Run: julia --project -t 20 al12/01_committee.jl        Env: OUT, ACE_MODELS, RHO_INTERVAL (25)
+# AMENDED COPY of bandpath_committee_undotted_Al_12_4_6A_2.jl (legacy left untouched):
+#   • N_cell_fc = 4 (was 3): the 3×3×3 supercell was too small for the 6 Å cutoff
+#     (box-half ~6.07 Å ≈ cutoff) → contaminated zone-boundary phonons.  N_cell=4/5 is
+#     converged (see scripts/uq/phonon_pipeline_ncell_diagnosis_Al_12_4_6A_2.jl).
+#   • N_per_seg = [20,20,20,20,60]: denser sampling of the final Γ→K segment, where the
+#     soft modes concentrate, so the cutting-plane constrain + rejection predicate can
+#     catch a sharp dip between q-points (needs the per-segment fcc_band_path in src).
+#   • outputs → results/bandpath_undotted_ncell4_densek/ (does not clobber the legacy run).
+#
+# Phonon-stable POPS committee on the UNDOTTED Hessian.  H_k = ∂²B_k/∂r² depends
+# only on geometry, so at fixed a_eq it is built ONCE; every member's phonon
+# check is D(q,θ) = Σ_k θ_k D_k(q) (matvec + tiny eigen) — cheap enough to be a
+# rejection predicate.  Validity needs a fixed a_eq (b′·θ=0 pins each member's
+# equilibrium onto the reference geometry).  Pipeline:
+#   0. undotted H_basis (once, parallel) → D_k(q) on the FULL band path
+#   1. constrain a_eq: mean fit + POPS proposal all pinned to b′=0, b″>0, Born
+#   2. phonon sweep check (undotted) → flag naughty members
+#   3. constrain naughty: cutting-plane OSQP, positive-curvature rows, a_eq held
+#   4. rejection sample the committee, band-path phonon check as the predicate
+#   5. verify every final sample; 6. compare vs naive POPS + coverage
+#
+# All phonon/undotted machinery + the (Γ-correct) plotting live in
+# ../bandpath_phonon_uq/lib.jl so every model run shares one source of truth.
+# To run for a different model: change `dataset` below.
+#
+# Run:  sbatch scripts/uq/run_committee_ncell4_densek.slurm   (hmem; N_cell=4 → heavier H_basis build)
 
-include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))
+include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))  # [PORT] lib/bandpath.jl
 using SparseArrays, OSQP, Random
-# OSQP's rho schedule is the only timing-dependent input on the QP path.  At its default
-# (adaptive_rho_interval = 0) OSQP derives the iterations between rho updates from measured
-# wall-clock time, so two runs take different iterate paths and, after a cutting-plane cascade,
-# accept different vectors.  Pinning it makes reruns follow one path.
+# [REPRO] OSQP's rho schedule is the only timing-dependent input in the QP path.  Left at
+# its default (`adaptive_rho_interval = 0`, what the original runs) OSQP derives the
+# iterations between rho updates from MEASURED wall-clock time, so two runs take different
+# iterate paths and — after a cutting-plane cascade — accept different vectors.  Pinning it
+# removes that.  It does NOT recover the previously published members; it makes future runs
+# reproducible.  RHO_INTERVAL=0 restores the original behaviour.  See ../README.md.
 RHO_INTERVAL = parse(Int, get(ENV, "RHO_INTERVAL", "25"))
 
 Random.seed!(1234)
 
 element        = :Al
-dataset        = ""                        # "" → models/Al_12_4_6A_2_ (the full training set)
-N_cell_fc      = 4                         # 4×4×4: half-box 8.08 Å, clear of the 6 Å cutoff
-N_per_seg      = [20, 20, 20, 20, 60]      # dense Γ→K, where the soft modes sit
+dataset        = ""            # "" → full-dataset model (Al_20_4_6A_2_); e.g. "subset_50_percent"
+a_experimental = nothing       # Float (Å) to pin a_eq experimentally; nothing → mean model
+N_cell_fc      = 4                         # was 3 — too small for the 6 Å cutoff (contaminated phonons)
+N_per_seg      = [20, 20, 20, 20, 60]      # dense Γ→K (last segment); Int still works for uniform
 cut_margin_THz = 0.15
 n_lev, n_res, n_rand = 5, 10, 15
 max_cuts       = 40
+test_stride    = 10
 
 result     = load_model(element, 12, 4, 6, 2; dataset_name=dataset)
 model      = result.model; lin_params = result.lin_params; n_params = length(lin_params)
 P = result.P; Ap = Diagonal(result.W)*result.A/P; Yw = result.W.*result.Y; λ = 1.0/size(Ap,1)
-OUT    = get(ENV, "OUT", joinpath(@__DIR__, "..", "repro", "saved"))
-outdir = "$OUT/al12/committee"; mkpath(outdir)
+ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  # [PORT] the route root (run.sh sets OUT)
+outdir = get(ENV, "OUTDIR", "$ROUT/al12/committee"); mkpath(outdir)  # [PORT] was $(result.dir)/results/repro_bandpath_undotted_ncell4_densek
 @printf("Model %s: %d params, %d threads.  Outputs → %s\n", result.name, n_params, Threads.nthreads(), outdir)
 
 # ── reference geometry, Born + a_eq rows ─────────────────────────────────────
-a_eq = ACEWorkflow.relax_lattice_constant(model, element)
-@printf("a_eq = %.5f Å\n", a_eq)
+a_mean = ACEWorkflow.relax_lattice_constant(model, element)
+a_eq   = isnothing(a_experimental) ? a_mean : a_experimental
+@printf("a_mean = %.5f Å;  reference a_eq = %.5f Å%s\n", a_mean, a_eq, isnothing(a_experimental) ? "" : "  (experimental)")
 sys0 = ACEWorkflow.Elasticity.reference_system(element; a=a_eq)
 L0   = ustrip.(ACEWorkflow.Elasticity.lattice_matrix(sys0.cell.cell_vectors)); eV_to_GPa = 160.2176621/abs(det(L0))
 H_el = elastic_hessian_basis(model; element=element, a=a_eq)
@@ -53,30 +86,31 @@ b_double_prime = ForwardDiff.derivative(a -> ForwardDiff.derivative(lattice_basi
 born_rows  = vcat(c44_0', (c11_0.-c12_0)', (c11_0.+2 .*c12_0)', b_double_prime')
 born_lower = [0.1, 1.0, 0.1, 1e-9]
 
-# ── undotted Hessian (once) → band-path D_k(q) over the full path ────────────
+# ── Stage 0: undotted Hessian (once) → band-path D_k(q) over the FULL path ───
 bp = bandpath_Dk(result, model, element, a_eq, N_cell_fc; N_per_seg=N_per_seg)
 ω2_cut = (cut_margin_THz / FREQ_THz)^2
 let fm = bands(lin_params, bp)
     @printf("Undotted band-path, mean model: ω ∈ [%.3f, %.3f] THz\n", minimum(fm), maximum(fm))
 end
 
-# ── constrain a_eq (mean fit) + leverage/residual forest ─────────────────────
+# ── Stage 1: constrain a_eq (mean fit) + leverage/residual forest ────────────
 C = Symmetric(Ap'*Ap .+ λ.*(P'*P)); Cf = cholesky(C)
 AtX = Cf\Matrix(Ap'); θ̃ = Cf\(Ap'*Yw)
 leverage = vec(sum(Ap'.*AtX; dims=1)); residual = Yw .- Ap*θ̃
+forest_member(i) = lin_params .+ (P \ (AtX[:, i] .* (residual[i]/leverage[i])))
 Hqp = sparse(Ap'*Ap .+ λ.*(P'*P)); qqp = -(Ap'*Yw); osqp = OSQP.Model()
 function constrain_member(i, extra_rows, extra_lower)
     rows = vcat(born_rows, extra_rows); lowers = vcat(born_lower, extra_lower)
     A_full = vcat(sparse(Ap[i,:]'), sparse(b_prime'/P), sparse(rows/P))
     l = vcat([Yw[i]],[0.0],lowers); u = vcat([Yw[i]],[0.0],fill(Inf,length(lowers)))
-    OSQP.setup!(osqp; P=Hqp, q=qqp, A=A_full, l=l, u=u, max_iter=4_000_000, check_termination=25, verbose=false, eps_abs=1e-6, eps_rel=1e-6, adaptive_rho_interval=RHO_INTERVAL)
+    OSQP.setup!(osqp; P=Hqp, q=qqp, A=A_full, l=l, u=u, max_iter=4_000_000, check_termination=25, verbose=false, eps_abs=1e-6, eps_rel=1e-6, adaptive_rho_interval=RHO_INTERVAL)   # [REPRO] pinned rho schedule
     r = OSQP.solve!(osqp); return P \ r.x, r.info.status
 end
 function mean_fit(extra_rows=zeros(0,n_params), extra_lower=Float64[])   # b′=0, Born + extra
     rows = vcat(born_rows, extra_rows); lowers = vcat(born_lower, extra_lower)
     A_full = vcat(sparse(b_prime'/P), sparse(rows/P))
     l = vcat([0.0],lowers); u = vcat([0.0],fill(Inf,length(lowers)))
-    OSQP.setup!(osqp; P=Hqp, q=qqp, A=A_full, l=l, u=u, max_iter=4_000_000, check_termination=25, verbose=false, eps_abs=1e-6, eps_rel=1e-6, adaptive_rho_interval=RHO_INTERVAL)
+    OSQP.setup!(osqp; P=Hqp, q=qqp, A=A_full, l=l, u=u, max_iter=4_000_000, check_termination=25, verbose=false, eps_abs=1e-6, eps_rel=1e-6, adaptive_rho_interval=RHO_INTERVAL)   # [REPRO] pinned rho schedule
     return P \ OSQP.solve!(osqp).x
 end
 # the MEAN must obey the same phonon constraints as the committee — sweep & cut it too
@@ -97,9 +131,10 @@ taken = Set(vcat(lev_idx,res_idx)); rand_idx = Int[]
 while length(rand_idx) < n_rand; i = rand(1:length(Yw)); (i in taken) && continue; push!(rand_idx,i); push!(taken,i); end
 selected = vcat(lev_idx, res_idx, rand_idx)
 
-# ── a_eq-constrain each forest member, phonon-check, cut the soft ones ───────
-println("\n── a_eq-constrain + phonon-repair the proposal forest ───────")
+# ── Stages 2+3: a_eq-constrain each member, phonon-check, constrain naughty ──
+println("\n── a_eq-constrain + phonon-repair the proposal cloud ───────")
 committee = Vector{Vector{Float64}}(undef, length(selected)); n_cuts = zeros(Int, length(selected))
+naive = [forest_member(i) for i in selected]
 for (k, i) in enumerate(selected)
     extra_rows = zeros(0, n_params); extra_lower = Float64[]
     θ, _ = constrain_member(i, extra_rows, extra_lower)
@@ -113,10 +148,47 @@ for (k, i) in enumerate(selected)
     end
     committee[k] = θ
 end
-minf = [min_freq_stable(θ, bp) for θ in committee]
-@printf("Repaired (≥1 cut): %d / %d;  min band ω ∈ [%.3f, %.3f] THz\n",
-        count(>(0), n_cuts), length(selected), minimum(minf), maximum(minf))
+@printf("Repaired (≥1 cut): %d / %d\n", count(>(0), n_cuts), length(selected))
 
+# ── Stage 4: rejection sample, band-path phonon check as the predicate ──────
+println("── Rejection sample committee (phonon check = predicate) ───")
+con_deltas = reduce(hcat, committee)' .- θ_mean'
+hyp_eig, hyp_bound = hypercube(Matrix(con_deltas)); K_ref = dot(θ_mean, b_double_prime)
+n_ck = Ref(0); n_ph = Ref(0)
+predicate = θ -> begin
+    n_ck[] += 1
+    all(born_lower .<= born_rows*θ) || return false
+    abs(dot(b_prime, θ .- θ_mean)/K_ref) <= 0.1 || return false
+    n_ph[] += 1
+    min_freq_stable(θ, bp) >= cut_margin_THz - 1e-6
+end
+rej_mat, _ = rejection_sample_hypercube(hyp_eig, hyp_bound, θ_mean, predicate;
+                                        number_of_committee_members=length(selected), max_attempts=2_000_000)
+@printf("  funnel: %d drawn → %d past Born/a_eq → %d accepted (%.1f%%)\n", n_ck[], n_ph[], length(selected), 100*length(selected)/n_ck[])
+rej_committee = [rej_mat[:, i] for i in 1:size(rej_mat, 2)]
+writedlm("$outdir/committee_rejection.csv", rej_mat', ',')
 writedlm("$outdir/committee_repaired.csv", reduce(hcat, committee)', ',')
 writedlm("$outdir/theta_mean.csv", θ_mean, ',')          # phonon-repaired constrained mean
-println("→ $outdir/{theta_mean,committee_repaired}.csv")
+
+# ── Stage 5: verify (non-acoustic band-path minimum) ────────────────────────
+minf_rej   = [min_freq_stable(θ, bp) for θ in rej_committee]
+minf_naive = [min_freq_stable(θ, bp) for θ in naive]
+@printf("\n  rejection committee: min band ω ∈ [%.3f, %.3f] THz — %d/%d unstable\n",
+        minimum(minf_rej), maximum(minf_rej), count(<(-0.05), minf_rej), length(minf_rej))
+@printf("  naive POPS         : min band ω ∈ [%.3f, %.3f] THz — %d/%d unstable\n",
+        minimum(minf_naive), maximum(minf_naive), count(<(-0.05), minf_naive), length(minf_naive))
+
+# ── Stage 6: propagate to phonons (Γ-correct plots) + coverage ──────────────
+plot_committee_bands(rej_committee, θ_mean,     bp, "$(result.name) — constrained committee (band-path, a_eq-fixed)", "$outdir/bands_constrained.png")
+plot_committee_bands(naive,         lin_params, bp, "$(result.name) — naive POPS committee", "$outdir/bands_naive.png")
+
+println("\n── Test-set coverage (constrained committee) ───────────────")
+pr = committee_predictions(model, rej_committee, "data/Al/manual_df_test_Al.xyz"; stride=test_stride, point_params=θ_mean)
+let ev = mean((pr.tE.<pr.loE).|(pr.tE.>pr.hiE))
+    @printf("  energy RMSE=%.4g eV, coverage=%.1f%% (EV %.1f%%)\n", sqrt(mean((pr.pE.-pr.tE).^2)), (1-ev)*100, ev*100)
+end
+ACEpotentials.Models.set_linear_parameters!(model, lin_params)
+println("\n══ RESULT ══════════════════════════════════════════════════")
+@printf("  constrained committee: %d/%d phonon-unstable | naive: %d/%d\n",
+        count(<(-0.05), minf_rej), length(minf_rej), count(<(-0.05), minf_naive), length(minf_naive))
+println("All outputs → $outdir/")

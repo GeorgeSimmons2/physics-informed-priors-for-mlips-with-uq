@@ -1,4 +1,7 @@
-# rls_npt/04_fig_200K.jl — RLS vs constrained RLS after 200 K NPT (Al_12_4_6A_2).
+# [PORT] constrained-pops-repro rls_npt/04_fig_200K.jl: a verbatim copy of scripts/uq/rls_constrained_pops_Al_12/fig_200K_rls_vs_constrained.jl from
+#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
+#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
+# fig_200K_rls_vs_constrained.jl — RLS vs constrained RLS after 200 K NPT (Al_12_4_6A_2).
 #
 # Layout and styling follow thermal_expansion_vs_experiment/fcc_compare_constrained_vs_naive.jl
 # (left untouched — it reads a different run format):
@@ -7,25 +10,23 @@
 #   RIGHT bottom         time-averaged RDF, constrained RLS (blue)
 # Phonons: 4×4×4 force constants, dense Γ→K (N_per_seg 20,20,20,20,60), as the paper figure.
 #
-# Inputs ($OUT/rls_npt/npt/<m>/, from 02_npt.jl and 03_rdf.jl):
+# Inputs (written by the pipeline in README.md):
 #   npt/<m>/theta_used.csv          θ the MD ran with
 #   npt/<m>/T200K/summary_row.csv   a(200 K) = mean ∛V/4 over production frames (step ≥ 10 000)
 #   npt/<m>/rdf_200K.csv            make_rdf_coordination.jl, same production frames
-# Outputs → $OUT/rls_npt/fig_200K/: the figure, bands_<m>.csv, rdf_<m>.csv, metadata.csv
+# Outputs → fig_200K/: the figure, bands_<m>.csv, rdf_<m>.csv, metadata.csv
 #
-# Ported from scripts/uq/rls_constrained_pops_Al_12/fig_200K_rls_vs_constrained.jl of the
-# physics-informed-priors repository; only the paths differ.
-#
-# Run:  julia --project -t 8 rls_npt/04_fig_200K.jl
-#   env: OUT  NPT (default $OUT/rls_npt/npt)  OUTDIR (default $OUT/rls_npt/fig_200K)  FIGW (540)
+# Run:  julia --project -t 8 scripts/uq/rls_constrained_pops_Al_12/fig_200K_rls_vs_constrained.jl
+#   env: NPT (default <this dir>/npt)  OUTDIR (default <this dir>/fig_200K)  FIGW (540)
 
-include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))
+include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))  # [PORT] lib/bandpath.jl
+
 T_K       = 200
 N_per_seg = [20, 20, 20, 20, 60]
-ROUT      = get(ENV, "OUT", joinpath(@__DIR__, "..", "repro", "saved"))
-NPT       = get(ENV, "NPT", "$ROUT/rls_npt/npt")
-outdir    = get(ENV, "OUTDIR", "$ROUT/rls_npt/fig_200K"); mkpath(outdir)
-MODELDIR  = model_dir("Al_12_4_6A_2_")                 # honours ACE_MODELS (the refit route)
+ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  # [PORT] the route root (run.sh sets OUT)
+NPT       = get(ENV, "NPT", "$ROUT/rls_npt/npt")                          # [PORT] was <script dir>/npt
+outdir    = get(ENV, "OUTDIR", "$ROUT/rls_npt/fig_200K"); mkpath(outdir)  # [PORT] was <script dir>/fig_200K
+MODELDIR  = model_dir("Al_12_4_6A_2_")   # [PORT] honours ACE_MODELS (the refit route's models)
 
 # fast load (JSON + lin_params, no design matrix) — bandpath_Dk only uses dir and lin_params
 model, _ = ACEpotentials.load_model("$MODELDIR/Al_12_4_6A_2.json")
@@ -101,7 +102,8 @@ axs = map(enumerate(((rls, RED, 0.70, "RLS", "(b)"), (con, BLU, 0.75, "Constrain
     barplot!(ax, x.r, x.g; width=step(range(x.r[1], x.r[end]; length=length(x.r))), color=(col, α), gap=0, strokewidth=0)
     vlines!(ax, shells(x.a, rmax); color=(ORA, 0.85), linestyle=:dash, linewidth=1.0)
     xlims!(ax, 0, rmax)
-    i == 1 && hidexdecorations!(ax; grid=false, ticks=false, minorticks=false)
+    i == 1 && (hidexdecorations!(ax; grid=false, ticks=false, minorticks=false);
+               text!(ax, 0.985, 0.93; space=:relative, align=(:right, :top), fontsize=SMALL, color=ORA))
     text!(ax, 0.025, 0.95; text=tag, space=:relative, align=(:left, :top), font=:bold, fontsize=TITLE)
     ax
 end

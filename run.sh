@@ -40,7 +40,7 @@ route() {
     local E="OUT=$O,ACE_MODELS=$AM,MODEL_FILE=$MF"
     local T='-t $SLURM_NTASKS'
     # Al_12: in sequence — 01 builds the 4×4×4 undotted Hessian cache the next three read
-    local c1 c2 c3 c4 d1 d2 f4 r1 n1 n2 f2 m1 m2 p1 p2 p3 p4
+    local c1 c2 c3 c4 c5 d1 d2 f4 r1 n1 n2 f2 m1 m2 p1 p2 p3 p4
     c1=$(sub "${N}_al12_01" "$AD" "$PART" 20 3988 06:00:00 "$E" "$JL $T al12/01_committee.jl")
     c2=$(sub "${N}_al12_02" "$c1" "$PART" 42 3988 04:00:00 "$E" "$JL $T al12/02_cutting_plane_cloud.jl")
     c3=$(sub "${N}_al12_03" "$c2" "$PART" 8 12000 04:00:00 "$E" "$JL $T al12/03_hypercube_rejection.jl")
@@ -48,10 +48,13 @@ route() {
     # Al_16
     d1=$(sub "${N}_al16_01" "$AD" "$PART" 40 3988 06:00:00 "$E,BUILD_THREADS=16" "$JL $T al16/01_pinned_ensembles.jl")
     d2=$(sub "${N}_al16_02" "$d1" "$PART" 40 3988 08:00:00 "$E" "$JL $T al16/02_bands.jl")
-    f4=$(sub "${N}_four_panel" "$c4:$d2" "$PART" 1 8000 00:30:00 "$E" "$JL four_panel/plot_four_panel.jl")
+    # the four-panel figure: the Al_12 band cache (31 native Hessians, each member at its own geometry), then the plot
+    c5=$(sub "${N}_four_panel_cache" "$c4" "$PART" 40 3988 04:00:00 "$E" "$JL $T four_panel/build_bands_cache_Al_12.jl")
+    f4=$(sub "${N}_four_panel" "$c5:$d2" "$PART" 1 8000 00:30:00 "$E" "$JL four_panel/plot_four_panel.jl")
     # RLS vs constrained RLS, 200 K NPT of both (same seed: common random numbers)
-    local NPT="TEMPS=200,SEED_MODE=same,MD_SEED=1234"
-    r1=$(sub "${N}_rls_01" "$AD" "$PART" 20 3988 12:00:00 "$E" "$JL $T rls_npt/01_constrained_rls.jl")
+    local NPT="TEMPS=200,SEED_MODE=same,MD_SEED=1234,MODELDIR=$AM/Al_12_4_6A_2_"
+    # 20 threads with two CPUs' memory each: six 5×5×5 undotted Hessians (500 atoms, 1.6 GB per thread buffer)
+    r1=$(sub "${N}_rls_01" "$AD" "$PART" 20 7976 12:00:00 "$E" "$JL $T rls_npt/01_constrained_rls.jl")
     n1=$(sub "${N}_npt_rls" "$AD" "$PART" 4 3988 24:00:00 \
          "$E,$NPT,THETA_FILE=$AM/Al_12_4_6A_2_/lin_params.csv,TAG=rls,OUTDIR=$O/rls_npt/npt/rls" "$JL $T rls_npt/02_npt.jl")
     n2=$(sub "${N}_npt_con" "$r1" "$PART" 4 3988 24:00:00 \
@@ -68,7 +71,7 @@ route() {
     p3=$(sub "${N}_pops_sample" "$p2" "$PART" 4 2000 02:00:00 "$ME" "$JL mace/pops/p3_sample.jl")
     p4=$(sub "${N}_pops_eval" "$p3" "$PART" 16 2000 06:00:00 "$ME" \
          "$PY mace/pops/p4_evaluate.py && $PY mace/pops/p5_figures.py && $PY mace/pops/p6_maxdev_vs_error.py")
-    echo "$N: Al_12 $c1→$c2→$c3→$c4 | Al_16 $d1→$d2 | four-panel $f4 | RLS $r1, NPT $n1 $n2 → fig $f2"
+    echo "$N: Al_12 $c1→$c2→$c3→$c4→$c5 | Al_16 $d1→$d2 | four-panel $f4 | RLS $r1, NPT $n1 $n2 → fig $f2"
     echo "$N: MACE $m1→$m2 | POPS $p1→$p2→$p3→$p4      logs: $LOG/"
 }
 

@@ -30,7 +30,7 @@ const Z_TOL = parse(Float64, get(ENV, "Z_TOL", "4.5"))
 struct Check
     label::String
     tier::Symbol
-    status::Symbol          # :ok | :fail | :missing
+    status::Symbol          # :ok | :fail | :missing | :info (reported, not judged)
     detail::String
 end
 
@@ -113,7 +113,7 @@ function check_distribution(label, tier, published, repro; col::Int=2, unit="", 
 end
 
 function report(checks::Vector{Check}, io::IO=stdout)
-    sym = Dict(:ok => "PASS", :fail => "FAIL", :missing => "  — ")
+    sym = Dict(:ok => "PASS", :fail => "FAIL", :missing => "  — ", :info => "info")
     println(io, "| quantity | tier | verdict | detail |")
     println(io, "|---|---|---|---|")
     for c in checks
@@ -123,6 +123,7 @@ function report(checks::Vector{Check}, io::IO=stdout)
     nm = count(c -> c.status === :missing, checks)
     no = count(c -> c.status === :ok, checks)
     println(io)
-    println(io, "$no passed, $nf failed, $nm not yet produced.")
+    ni = count(c -> c.status === :info, checks)
+    println(io, "$no passed, $nf failed, $nm not yet produced, $ni reported for information.")
     return nf
 end

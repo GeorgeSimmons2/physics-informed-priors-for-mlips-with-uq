@@ -1,23 +1,19 @@
-# rls_npt/01_constrained_rls.jl — the RLS fit of Al_12_4_6A_2_ and the same fit with physical
-# constraints, no POPS: the multi-volume comparison behind the 200 K NPT figure.
+# [PORT] constrained-pops-repro rls_npt/01_constrained_rls.jl: a verbatim copy of scripts/uq/rls_constrained_pops_Al_12/compare_rls_Al_12_4_6A_2.jl from
+#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
+#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
+# compare_rls_Al_12_4_6A_2.jl — phonons of the RLS fit vs the constrained RLS fit, no POPS.
 #
-#   RLS          the model's own fit (lin_params)
-#   constrained  the RLS objective, minimised in θ̃ = Pθ with b′(a_eq)·θ = 0 (a_eq held), Born
-#                stability, and cutting-plane rows until ω ≥ 0.01 THz on the full band path at
-#                every lattice scale 1.00, 1.02, …, 1.10 × a_eq (5×5×5 force constants), so the
-#                phonons stay real over the whole thermal-expansion range
+#   RLS          lin_params
+#   constrained  RLS with b′(a_eq)·θ = 0 (a_eq held), Born, ω > 0 at 1.00 and 1.02 a_eq (cutting plane)
 #
-# Ported from scripts/uq/rls_constrained_pops_Al_12/compare_rls_Al_12_4_6A_2.jl of the
-# physics-informed-priors repository; only the paths differ.
-#
-# Out: $OUT/rls_npt/constrained/{theta_rls_constrained.csv, bands_rls_vs_constrained.{pdf,png}}
-# Run: julia --project -t 20 rls_npt/01_constrained_rls.jl      Env: OUT, ACE_MODELS
+# Both relax to a_eq, so one Hessian per volume serves both.
+# Run:  julia --project -t 20 scripts/uq/rls_constrained_pops_Al_12/compare_rls_Al_12_4_6A_2.jl   (OUTDIR=<this dir>/results_rls)
 
-include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))
+include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))  # [PORT] lib/bandpath.jl
 using SparseArrays, OSQP
 
-OUT        = get(ENV, "OUT", joinpath(@__DIR__, "..", "repro", "saved"))
-outdir     = "$OUT/rls_npt/constrained"; mkpath(outdir)
+ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  # [PORT] the route root (run.sh sets OUT)
+outdir     = get(ENV, "OUTDIR", "$ROUT/rls_npt/constrained"); mkpath(outdir)  # [PORT] was <script dir>/results_rls
 vol_scales = [1.00, 1.02, 1.04, 1.06, 1.08, 1.10]
 margin     = 0.01                                    # THz
 ω2_cut     = (margin / FREQ_THz)^2
@@ -26,7 +22,7 @@ result = load_model(:Al, 12, 4, 6, 2; dataset_name="")
 model, lin_params, P = result.model, result.lin_params, result.P
 Ap = Diagonal(result.W)*result.A/P; Yw = result.W.*result.Y; λ = 1.0/size(Ap,1)
 
-# ── a_eq pin, Born rows, band paths at every lattice scale ───────────────────
+# ── a_eq pin, Born rows, band paths at both volumes ──────────────────────────
 a_eq = ACEWorkflow.relax_lattice_constant(model, :Al)
 lattice_basis(a) = ustrip.(u"eV", ACEpotentials.Models.potential_energy_basis(ACEWorkflow.Elasticity.reference_system(:Al; a=a), model))
 b_prime = ForwardDiff.derivative(lattice_basis, a_eq)
@@ -38,7 +34,7 @@ born_lower = [0.1, 1.0, 0.1, 1e-9]
 bps   = [bandpath_Dk(result, model, :Al, s*a_eq, 5) for s in vol_scales]
 minω(θ) = [min_freq_stable(θ, bp) for bp in bps]
 
-# ── constrained RLS: QP in θ̃ = Pθ, cutting plane over every scale ───────────
+# ── constrained RLS: QP in θ̃ = Pθ, cutting plane over both volumes ──────────
 osqp = OSQP.Model(); Hqp = sparse(Ap'*Ap .+ λ.*(P'*P)); qqp = -(Ap'*Yw)
 function fit(rows, lower)
     A = vcat(sparse(b_prime'/P), sparse(rows/P)); l = vcat(0.0, lower); u = vcat(0.0, fill(Inf, length(lower)))

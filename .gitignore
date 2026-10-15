@@ -6,6 +6,6 @@ repro/
 # tier B: linked in by run.sh data, checked against data/tierB.sha256
 data/Al/
 models/*/A.csv
-# Hessian caches, rebuilt on demand beside each model
-models/*/cache/
+# undotted-Hessian caches (lib/bandpath.jl), rebuilt on demand beside each model
+models/*/results/
 __pycache__/

@@ -1,7 +1,25 @@
-# al12/02_cutting_plane_cloud.jl — cutting-plane constrain the WHOLE top-leverage POPS cloud.
+# [PORT] constrained-pops-repro al12/02_cutting_plane_cloud.jl: a verbatim copy of constrained_optimization/al12/02_cutting_plane_full_cloud.jl from
+#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
+#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
+# ─────────────────────────────────────────────────────────────────────────────
+# PINNED REPRODUCTION COPY of scripts/uq/cutting_plane_full_cloud_Al_12_4_6A_2.jl
 #
-# At leverage_percentile = 0.5 that is 73,479 of 146,958 observations for Al_12_4_6A_2_ — the same
-# cloud `corrections(...; leverage_percentile=0.5)` builds.  Per observation i the member solves
+# Stage 2 of the Al_12 chain behind the TOP ROW of bands_four_panel/.  This is the
+# expensive one: it cutting-plane constrains all 73,479 top-leverage POPS members, and
+# 03_hypercube_rejection.jl builds its hypercube from the result.
+#
+# Differences from the original are marked `# [REPRO]` and tabulated in ../README.md:
+# the include path, a pinned OSQP rho schedule, and an output directory that cannot
+# overwrite the published committee.  No constraint, sampler or physics change.
+# ─────────────────────────────────────────────────────────────────────────────
+# cutting_plane_full_cloud_Al_12_4_6A_2.jl
+#
+# Cutting-plane constrain the WHOLE top-leverage POPS cloud, not just a 30-member
+# forest. At leverage_percentile = 0.5 that is 73,479 of 146,958 observations for
+# Al_12_4_6A_2_ -- the same cloud `corrections(...; leverage_percentile=0.5)`
+# builds.
+#
+# Per observation i the constrained POPS member solves
 #
 #     min  1/2 x'Hx + q'x        (x = P*theta, OSQP's variable)
 #     s.t. Ap[i,:]·x = Yw[i]     POPS interpolation, exact
@@ -9,21 +27,39 @@
 #          Born rows >= bounds   elastic stability
 #          + cutting planes      e'D(q;theta)e >= omega_cut^2, added on demand
 #
-# One OSQP model per thread (OSQP.setup! mutates the model, so a shared one is not thread-safe).
-# The committee is serialised (73,479 × 91 as CSV would be ~130 GB); partial results are
-# checkpointed every `ckpt_every` members so a walltime kill does not lose the run.
+# COST. Measured in scripts/uq/sdp_vs_cuts_benchmark_Al_12_4_6A_2.jl: ~10 ms for a
+# member needing no cuts, ~0.3 s for one needing 3. Five of six needed none, so
+# ~10 ms x 73,479 ~ 750 s single-threaded is the right order. Two things can break
+# that estimate, so both are instrumented and reported:
+#   * members that hit max_cuts pay 40 solves against a constraint matrix that
+#     grows by one row per soft mode -- if these are common they dominate;
+#   * OSQP may return non-Solved for observations where the interpolation equality
+#     is infeasible against Born + phonon rows. Status is recorded, never ignored.
 #
-# Ported from constrained_optimization/al12/02_cutting_plane_full_cloud.jl of the
-# physics-informed-priors repository; only the paths differ.
+# THREADING. The legacy `osqp = OSQP.Model()` at module scope is mutated by
+# setup!, so it is NOT thread-safe. One model per thread here.
 #
-# Out: $OUT/al12/cloud/{committee_stable.jls, committee_full_cloud.jls, member_diagnostics.csv}
-# Run: julia --project -t 16 al12/02_cutting_plane_cloud.jl [n_members]    (≤0 → all; a pilot writes *_pilotN)
-# Env: OUT, ACE_MODELS, RHO_INTERVAL (25)
+# OUTPUT SIZE. 73,479 x 91 as text CSV would be ~130 GB. The committee is written
+# with `serialize` (~53 MB) instead; only per-member diagnostics go to CSV.
+#
+# CHECKPOINTING. Partial results are serialised every `ckpt_every` members so a
+# walltime kill does not lose the run.
+#
+# Run a PILOT first to calibrate before committing to the full cloud:
+#   julia --project -t 16 scripts/uq/cutting_plane_full_cloud_Al_12_4_6A_2.jl 500
+# then the full thing (n_members <= 0 means "all"):
+#   sbatch scripts/uq/run_cutting_plane_full_cloud.slurm
 
-include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))
+include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))  # [PORT] lib/bandpath.jl
 using SparseArrays, LinearAlgebra, OSQP, Serialization, Printf
-# Pinned OSQP rho schedule: see al12/01_committee.jl.
+# [REPRO] OSQP's rho schedule is the only timing-dependent input in the QP path.  Left at
+# its default (`adaptive_rho_interval = 0`, what the original runs) OSQP derives the
+# iterations between rho updates from MEASURED wall-clock time, so two runs take different
+# iterate paths and — after a cutting-plane cascade — accept different vectors.  Pinning it
+# removes that.  It does NOT recover the previously published members; it makes future runs
+# reproducible.  RHO_INTERVAL=0 restores the original behaviour.  See ../README.md.
 RHO_INTERVAL = parse(Int, get(ENV, "RHO_INTERVAL", "25"))
+
 
 element, dataset  = :Al, ""
 N_cell_fc         = 4
@@ -42,11 +78,11 @@ result = load_model(element, 12, 4, 6, 2; dataset_name=dataset)
 model  = result.model; lin_params = result.lin_params; n_params = length(lin_params)
 P = result.P; Ap = Diagonal(result.W)*result.A/P; Yw = result.W.*result.Y
 M = size(Ap, 1); λ = 1.0/M
-OUT    = get(ENV, "OUT", joinpath(@__DIR__, "..", "repro", "saved"))
-outdir = "$OUT/al12/cloud"; mkpath(outdir)
+ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  # [PORT] the route root (run.sh sets OUT)
+outdir = get(ENV, "OUTDIR", "$ROUT/al12/cloud"); mkpath(outdir)  # [PORT] was $(result.dir)/results/repro_cutting_plane_full_cloud
 @printf("%s: %d observations x %d params\n", result.name, M, n_params); flush(stdout)
 
-# ── reference geometry, Born + a_eq rows ─────────────────────────────────────
+# ── reference geometry, Born + a_eq rows (verbatim from the legacy script) ────
 a_eq = ACEWorkflow.relax_lattice_constant(model, element)
 sys0 = ACEWorkflow.Elasticity.reference_system(element; a=a_eq)
 L0   = ustrip.(ACEWorkflow.Elasticity.lattice_matrix(sys0.cell.cell_vectors))
@@ -81,6 +117,8 @@ N = length(selected)
         minimum(lev), maximum(lev), thresh, N, t); flush(stdout)
 
 # ── precompute everything constant in the hot loop ───────────────────────────
+# The legacy constrain_member re-does `born_rows/P` and `b_prime'/P` on EVERY
+# call; over 73k members that is pure waste, so hoist them.
 Hqp        = sparse(Ap'*Ap .+ λ.*(P'*P))
 qqp        = -(Ap'*Yw)
 born_rows_P = sparse(born_rows / P)
@@ -96,7 +134,7 @@ function solve_one!(osqp, i, extra_rows_P, extra_lower)
     u = vcat([Yw[i]], [0.0], fill(Inf, length(born_lower) + length(extra_lower)))
     OSQP.setup!(osqp; P=Hqp, q=qqp, A=A_full, l=l, u=u, max_iter=4_000_000,
                 check_termination=25, verbose=false, eps_abs=1e-6, eps_rel=1e-6,
-                adaptive_rho_interval=RHO_INTERVAL)
+                adaptive_rho_interval=RHO_INTERVAL)   # [REPRO] pinned rho schedule
     r = OSQP.solve!(osqp)
     return Pfac \ r.x, r.info.status
 end

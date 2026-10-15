@@ -1,11 +1,13 @@
+# [PORT] constrained-pops-repro lib/parity_calibration.jl: a copy of scripts/uq/lib_parity_calibration.jl from physics-informed-priors-repro
+#        (457087f), without parity_calibration_row/_header, which nothing here calls.  Every other change is marked [PORT].
 # lib_parity_calibration.jl
 #
 # Paper-quality parity and calibration figures, extracted verbatim from
-# al12/03_hypercube_rejection.jl so there is ONE copy of the plotting
+# hypercube_full_cloud_bands_Al_12_4_6A_2.jl so there is ONE copy of the plotting
 # machinery rather than one per model.  Any script with a `pr` from
 # committee_predictions can produce identical figures.
 #
-# Assumes the caller has already included lib/bandpath.jl (for
+# Assumes the caller has already included scripts/bandpath_phonon_uq/lib.jl (for
 # CairoMakie, Printf, Statistics and StatsBase's fit/Histogram).
 #
 # Each call writes ONE figure with two panels, (a) energy and (b) force:
@@ -136,7 +138,7 @@ end
 #  Fast committee predictions: build the design row ONCE per configuration, then
 #  every member is a matvec.
 # ═════════════════════════════════════════════════════════════════════════════
-# The slow path (@committee in the original scripts) calls, which
+# committee_predictions in scripts/bandpath_phonon_uq/lib.jl calls @committee, which
 # re-evaluates the potential for EVERY member of EVERY configuration — O(n_cfg × n_mem)
 # full ACE evaluations.  But the model is LINEAR in the parameters:
 #

@@ -1,8 +1,41 @@
-# al16/01_pinned_ensembles.jl — the two Al_16 ensembles (bottom row of the four-panel figure).
+# [PORT] constrained-pops-repro al16/01_pinned_ensembles.jl: a verbatim copy of constrained_optimization/al16/01_pinned_rejection_ensembles.jl from
+#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
+#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
+# ─────────────────────────────────────────────────────────────────────────────
+# PINNED REPRODUCTION COPY of scripts/uq/pinned_rejection_ensembles_Al_16_4_6A_3.jl
+#
+# Stage 1 of the pair behind the BOTTOM ROW of bands_four_panel/.  Differences from the
+# original are marked `# [REPRO]` and tabulated in ../README.md.  No constraint, sampler,
+# predicate or physics setting is changed — only defaults that had drifted, and an output
+# directory that cannot clobber the published run.
+#
+# WHY THE DEFAULTS ARE PINNED BACK.  The published figure used N_MEMBERS=20 and
+# ACCEPT_TOL=-0.05 (still what this script's own header comment says).  The working copy's
+# defaults are now 10000 and 0.005, and a 19 Aug run at those values OVERWROTE the
+# published ensembles in results/pinned_ensembles/.  Both defaults matter:
+#
+#   ACCEPT_TOL  changes the predicate, so the accepted stream diverges at the first
+#               proposal that passes -0.05 but fails 0.005.
+#   N_MEMBERS   changes the UNCONSTRAINED arm too, even at a fixed seed:
+#               sample_hypercube draws `U = rand(N, d)` and takes member i from ROW i,
+#               so member i's random numbers sit at stream positions {i, i+N, i+2N, …}.
+#               Change N and every member changes.  (rejection_sample_hypercube draws
+#               one d-vector per proposal and does NOT have this problem.)
+#
+# Measured before pinning: the published unconstrained ensemble is soft at members
+# {2,4,6,18}; the 19 Aug run's first 20 are soft at {6,14,19}.  Different draws.
+# ─────────────────────────────────────────────────────────────────────────────
+# pinned_rejection_ensembles_Al_16_4_6A_3.jl
+#
+# STAGE 1 of three.  Builds the two ensembles that stages 2 and 3 consume:
 #
 #   ensemble_unconstrained.csv   pinned hypercube, drawn with NO predicate
 #   ensemble_constrained.csv     same box, same seed, accepted only if the member is
-#                                dynamically stable (every band-path ω ≥ ACCEPT_TOL)
+#                                dynamically stable
+#
+#   stage 2  scripts/qoi/bands_two_ensembles_Al_16_4_6A_3.jl   per-member geom opt,
+#            individual native Hessians, the two band figures on one frequency axis
+#   stage 3  scripts/uq/parity_calibration_Al_16_4_6A_3.jl     parity and calibration
 #
 # ── WHY PIN FIRST ───────────────────────────────────────────────────────────
 # The undotted per-basis Hessian is built at ONE geometry, so Σ_k θ_k D_k(q) is the
@@ -32,26 +65,22 @@
 # atom's neighbours contribute.  Full H_basis here would be 768×768×684×8 = 3.2 GB;
 # three rows is 12.6 MB.  Verified against a full cache at machine precision.
 #
-# Ported from constrained_optimization/al16/01_pinned_rejection_ensembles.jl of the
-# physics-informed-priors repository, with the published run's N_MEMBERS = 20 and ACCEPT_TOL =
-# −0.05 (a later run at 10000 / 0.005 overwrote those ensembles; both values change the draws).
-#
-# Out: $OUT/al16/ensembles/{ensemble_unconstrained.csv, ensemble_constrained.csv,
-#      pinned_ensembles.jls, bandpath_4x4x4_aref.jls (the 3-row band path, reused if present)}
-# Run: BUILD_THREADS=16 julia --project -t 40 al16/01_pinned_ensembles.jl
-# Env: OUT, ACE_MODELS, N_MEMBERS (20), PIN_TOL (1e-6), ACCEPT_TOL (-0.05), LEV_PCT (0.5), N_CELL (4), MAX_ATTEMPTS
+# Run:  BUILD_THREADS=16 julia --project -t 40 scripts/uq/pinned_rejection_ensembles_Al_16_4_6A_3.jl
+#   N_MEMBERS=20  PIN_TOL=1e-6  ACCEPT_TOL=-0.05  LEV_PCT=0.5  N_CELL=4  MAX_ATTEMPTS=
 
 using ACEWorkflow, ACEpotentials
 import ACEpotentials.Models: evaluate_basis
 import AtomsCalculatorsUtilities.SitePotentials: PairList, get_neighbours, cutoff_radius
 using AtomsBuilder, Unitful, ForwardDiff, StaticArrays
 using LinearAlgebra, Statistics, Random, Serialization, DelimitedFiles, Printf
+using CairoMakie
+using Bumper: @no_escape   # [PORT] see undotted_rows
 Random.seed!(1234)
 
 element      = :Al
-N_MEMBERS    = parse(Int,     get(ENV, "N_MEMBERS", "20"))      # the published run used 20
+N_MEMBERS    = parse(Int,     get(ENV, "N_MEMBERS", "20"))      # [REPRO] was 10000; published run used 20
 PIN_TOL      = parse(Float64, get(ENV, "PIN_TOL", "1e-6"))     # max |b′·θ| we accept
-ACCEPT_TOL   = parse(Float64, get(ENV, "ACCEPT_TOL", "-0.05"))  # THz; the published run used -0.05
+ACCEPT_TOL   = parse(Float64, get(ENV, "ACCEPT_TOL", "-0.05"))  # [REPRO] was 0.005; published run used -0.05  (THz)
 LEV_PCT      = parse(Float64, get(ENV, "LEV_PCT", "0.5"))
 N_CELL       = parse(Int,     get(ENV, "N_CELL", "4"))
 qΓtol        = 5e-2
@@ -59,15 +88,22 @@ N_PER_SEG    = [20, 20, 20, 20, 60]
 MAX_ATTEMPTS = parse(Int, get(ENV, "MAX_ATTEMPTS", string(5000 * N_MEMBERS)))
 const BUILD_THREADS = parse(Int, get(ENV, "BUILD_THREADS", "8"))
 
-OUT     = get(ENV, "OUT", joinpath(@__DIR__, "..", "repro", "saved"))
-outdir  = "$OUT/al16/ensembles"; mkpath(outdir)
-# The band path is pure geometry at a_eq (independent of N_MEMBERS, the predicate and every
-# member), so a cache from an earlier run of the same model is reused; BPCACHE relocates it.
-BPCACHE = get(ENV, "BPCACHE", "$outdir/bandpath_$(N_CELL)x$(N_CELL)x$(N_CELL)_aref.jls")
+ROOT     = normpath(joinpath(@__DIR__, "..", ".."))              # [REPRO] repo root, not the cwd
+MODELDIR = model_dir("Al_16_4_6A_3_")   # [PORT] honours ACE_MODELS (the refit route's models)
+ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  # [PORT] the route root (run.sh sets OUT)
+outdir   = get(ENV, "OUTDIR", "$ROUT/al16/ensembles"); mkpath(outdir)  # [PORT] was $MODELDIR/results/repro_pinned_ensembles
+# [REPRO] The band path is pure geometry at a_eq — it does not depend on N_MEMBERS, on
+#         the predicate, or on any member — so the published run's 13.9 MB cache is the
+#         same object and is reused read-only when it is there.  Set BPCACHE to force a
+#         rebuild, or to relocate it.
+BPCACHE  = get(ENV, "BPCACHE", let published = "$MODELDIR/results/pinned_ensembles/bandpath_$(N_CELL)x$(N_CELL)x$(N_CELL)_aref.jls"
+                  isfile(published) ? published : "$outdir/bandpath_$(N_CELL)x$(N_CELL)x$(N_CELL)_aref.jls"
+              end)
 
 # ═════════════════════════════════════════════════════════════════════════════
-#  3-row undotted band-path builder: for a 1-atom primitive cell only 3 rows of H are read,
-#  and only the reference atom's neighbours contribute (12.6 MB instead of 3.2 GB).
+#  3-row undotted band-path builder.  Duplicated from
+#  scripts/uq/pinned_hypercube_rejection_Al_20_4_6A_3.jl rather than included, so this
+#  script has no path dependency — keep the copies in step if either is edited.
 # ═════════════════════════════════════════════════════════════════════════════
 function _site_basis_hessian(m, Rs, Zs, z0, ps, st)
     nR = length(Rs)
@@ -95,7 +131,9 @@ function undotted_rows(sys_super, V, r)
             Hl = bufs[t]
             for i in contributors[t:nt:end]
                 Js, Rs, Zs, z0 = get_neighbours(sys_super, V, nlist, i)
-                Hi = _site_basis_hessian(m, Rs, Zs, z0, ps, st)
+                # [PORT] @no_escape: evaluate_basis bump-allocates (@withalloc) into this task's Bumper buffer and
+                # never rewinds it, so unscoped its temporaries accumulate as malloc'd slabs the GC cannot see
+                Hi = @no_escape begin _site_basis_hessian(m, Rs, Zs, z0, ps, st) end
                 Ji = (i-1)*D .+ (1:D); is_ref = (i == r)
                 for (α1, j1) in enumerate(Js)
                     hit1 = (j1 == r); (hit1 || is_ref) || continue
@@ -298,5 +336,6 @@ serialize("$outdir/pinned_ensembles.jls",
              LEV_PCT, N_CELL, acceptance = N_MEMBERS/n_prop[],
              n_rej_K = n_rej_K[], n_rej_ω = n_rej_ω[], seed = 1234))
 println("\nensembles → $outdir/ensemble_{unconstrained,constrained}.csv")
-println("            ($N_MEMBERS × $n_params, one full coefficient vector per row)")
-println("next: al16/02_bands.jl")
+println("            ($N_MEMBERS × $n_params, one full coefficient vector per row)")  # [REPRO] was a hardcoded 20
+println("next: scripts/qoi/bands_two_ensembles_Al_16_4_6A_3.jl, then")
+println("      scripts/uq/parity_calibration_Al_16_4_6A_3.jl")

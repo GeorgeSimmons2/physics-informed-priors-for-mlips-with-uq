@@ -1,20 +1,31 @@
+# [PORT] constrained-pops-repro rls_npt/03_rdf.jl: a verbatim copy of thermal_expansion_vs_experiment/make_rdf_coordination.jl from
+#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
+#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
 # ─────────────────────────────────────────────────────────────────────────────
-# rls_npt/03_rdf.jl — time-averaged RDF and coordination of one NPT run's production frames.
+# make_rdf_coordination.jl — the producer of rdf_<T>K.csv and coordination_<T>K.csv.
 #
-# Production frames (step ≥ 10 000), 200 bins to half the smallest box, each frame its OWN box
-# (the cell changes every frame under the barostat); coordination counts neighbours within 3.3 Å.
-# Ported verbatim from thermal_expansion_vs_experiment/make_rdf_coordination.jl of the
-# physics-informed-priors repository (itself lifted from fcc_stability_figure_Al_12_4_6A_2.jl).
+# fcc_compare_constrained_vs_naive.jl READS those two files; nothing in this repository
+# wrote them.  In the original tree they were a side effect of two legacy FIGURE scripts
+# (scripts/uq/fcc_stability_figure_* and fcc_instability_figure_*), so a pipeline rerun
+# produced NPT trajectories with no RDF beside them and the FCC figure could not be drawn.
+# That is the same shape of gap as the W positive-core θ: an input with no producer.
 #
-#   julia --project rls_npt/03_rdf.jl <rundir> [T_K]
+# The pair analysis below is lifted VERBATIM from fcc_stability_figure_Al_12_4_6A_2.jl
+# (the `rdf_and_coord` function and the g(r) normalisation), with its constants:
+#   n_equil = 10_000 steps, nn_cutoff = 3.3 Å, n_bins = 200.
+# No physics or binning is changed — only the plotting is dropped.
+#
+# Each frame uses its OWN box, because the cell changes every frame under the barostat.
+#
+#   julia --project thermal_expansion_vs_experiment/make_rdf_coordination.jl <rundir> [T_K]
 #
 # Writes <rundir>/rdf_<T>K.csv and <rundir>/coordination_<T>K.csv, skipping either if it
-# already exists.  FORCE=1 to rewrite.
+# already exists (so it never overwrites the published files).  FORCE=1 to rewrite.
 # ─────────────────────────────────────────────────────────────────────────────
 
 using ExtXYZ, DelimitedFiles, Statistics, Printf
 
-rundir = length(ARGS) >= 1 ? ARGS[1] : error("usage: 03_rdf.jl <rundir> [T_K]")
+rundir = length(ARGS) >= 1 ? ARGS[1] : error("usage: make_rdf_coordination.jl <rundir> [T_K]")
 T_K    = length(ARGS) >= 2 ? parse(Int, ARGS[2]) : 300
 FORCE  = get(ENV, "FORCE", "0") != "0"
 

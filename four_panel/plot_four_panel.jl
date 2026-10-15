@@ -1,5 +1,15 @@
-# four_panel/plot_four_panel.jl — the 2×2 phonon-band figure: unconstrained POPS (left) vs
-# constrained POPS (right), for Al_12_4_6A_2_ (top row) and Al_16_4_6A_3_ (bottom row).
+# [PORT] constrained-pops-repro four_panel/plot_four_panel.jl: a verbatim copy of bands_four_panel/plot_four_panel_bands.jl from
+#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
+#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
+# plot_four_panel_bands.jl
+#
+# One 2×2 figure: unconstrained POPS (left) vs constrained POPS (right), for the
+# smaller model (top row) and the larger one (bottom row).  Replaces the three separate
+# figures it is assembled from:
+#
+#   models/Al_12_4_6A_2_/results/naive_vs_constrained/bands_naive_shared_axis.pdf   → (1,1)
+#   models/Al_12_4_6A_2_/results/naive_vs_constrained/bands_constrained_shared_axis.pdf → (1,2)
+#   models/Al_16_4_6A_3_/results/pinned_ensembles/bands_two_ensembles_clean.pdf     → (2,1),(2,2)
 #
 # The mean model is blue; EVERY ensemble member is grey, whether or not it is
 # dynamically stable.  Colouring the unstable ones crimson pre-labels the conclusion —
@@ -8,8 +18,11 @@
 # belong in the caption.
 #
 # ── PURE REPLOT ─────────────────────────────────────────────────────────────
-# Reads serialised band curves only (no Hessians, relaxations or sampling): al12/04's
-# bands_four_panel_Al_12.jls and al16/02's bands_two_ensembles.jls.
+# Reads serialised band curves only; no Hessians, no relaxations, no sampling.  The
+# Al_16 curves come straight from its run.  The Al_12 run saved only summary
+# statistics, so its curves have to be cached once first:
+#
+#   julia --project -t 40 bands_four_panel/build_bands_cache_Al_12.jl
 #
 # ── THE TWO ROWS DO NOT SHARE A FREQUENCY AXIS ──────────────────────────────
 # Within a row they must: unconstrained vs constrained is the comparison the figure
@@ -33,19 +46,18 @@
 # point-for-point between the same pair of high-symmetry points.  This is the same
 # convention the source scripts used; the assertion below catches any mismatch.
 #
-# Ported from bands_four_panel/plot_four_panel_bands.jl of the physics-informed-priors repository;
-# only the default paths differ.
-#
-# Run:  julia --project four_panel/plot_four_panel.jl
-#   OUT (route root; SRC12/SRC16 default to its caches, the figure goes to $OUT/four_panel/)
-#   SRC12/SRC16  input .jls    FIG  output stem    FIGW 540    ASPECT 0.78    SHARE_Y 0    LETTERS 0
+# Run:  julia --project bands_four_panel/plot_four_panel_bands.jl
+#   SRC12/SRC16  input .jls        OUT  output stem (default bands_four_panel/bands_four_panel)
+#   FIGW  540 (points, = the width the figure is DISPLAYED at in the paper)
+#   ASPECT 0.78    SHARE_Y 0    LETTERS 0    UNSTABLE  from the runs
 
 using Serialization, Statistics, Printf, CairoMakie
 
-ROUT    = get(ENV, "OUT", joinpath(@__DIR__, "..", "repro", "saved"))
-SRC12   = get(ENV, "SRC12", "$ROUT/al12/naive/bands_four_panel_Al_12.jls")
-SRC16   = get(ENV, "SRC16", "$ROUT/al16/bands/bands_two_ensembles.jls")
-OUT     = get(ENV, "FIG", "$ROUT/four_panel/bands_four_panel")
+ROOT    = normpath(joinpath(@__DIR__, ".."))
+ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  # [PORT] the route root (run.sh sets OUT)
+SRC12   = get(ENV, "SRC12", "$ROUT/al12/naive/bands_four_panel_Al_12.jls")    # [PORT] four_panel/build_bands_cache_Al_12.jl
+SRC16   = get(ENV, "SRC16", "$ROUT/al16/bands/bands_two_ensembles.jls")       # [PORT] al16/02_bands.jl
+FIG     = get(ENV, "FIG", "$ROUT/four_panel/bands_four_panel")   # [PORT] was OUT, which is now the route root
 FIGW    = parse(Float64, get(ENV, "FIGW", "540"))
 ASPECT  = parse(Float64, get(ENV, "ASPECT", "0.78"))
 SHARE_Y = get(ENV, "SHARE_Y", "0") != "0"
@@ -57,8 +69,9 @@ TITLE, LAB, TICK = 13, 12, 11
 
 isfile(SRC12) || error("""
     missing $SRC12
-    Run al12/04_naive_ensemble.jl, or set SRC12 (the published cache: published/al12/naive/).""")
-isfile(SRC16) || error("missing $SRC16 — run al16/02_bands.jl, or set SRC16")
+    The Al_12 run saved only summary statistics, not the band curves.  Build the cache:
+        julia --project -t 40 bands_four_panel/build_bands_cache_Al_12.jl""")
+isfile(SRC16) || error("missing $SRC16 — run scripts/qoi/bands_two_ensembles_Al_16_4_6A_3.jl, or set SRC16")
 
 d12 = deserialize(SRC12); d16 = deserialize(SRC16)
 
@@ -166,6 +179,6 @@ Legend(fig[1, 1:2],
 rowgap!(fig.layout, 1, 2); rowgap!(fig.layout, 2, 8)
 colgap!(fig.layout, 1, 4); colgap!(fig.layout, 2, 16)
 
-mkpath(dirname(OUT))
-save("$OUT.pdf", fig); save("$OUT.png", fig; px_per_unit = 4)
-@printf("\nfigure → %s.{pdf,png}\n", OUT)
+mkpath(dirname(FIG))
+save("$FIG.pdf", fig); save("$FIG.png", fig; px_per_unit = 4)
+@printf("\nfigure → %s.{pdf,png}\n", FIG)
