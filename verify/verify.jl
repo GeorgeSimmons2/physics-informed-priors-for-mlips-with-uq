@@ -67,8 +67,17 @@ function check_cloud(label, col, published, reproduced; unit="")
                    length(a), join(round.(qa[[1,4,7]]; sigdigits=4), "/"), join(round.(qb[[1,4,7]]; sigdigits=4), "/"), unit,
                    d, TIER_TOL[:statistical], 100*mean(a .== b), maximum(abs.(a .- b))))
 end
-push!(checks, check_cloud("Al_12 cloud: min ω per member (THz)", 5, "$P/al12/cloud/member_diagnostics.csv", "$O/al12/cloud/member_diagnostics.csv"; unit="THz"))
-push!(checks, check_cloud("Al_12 cloud: cuts per member", 3, "$P/al12/cloud/member_diagnostics.csv", "$O/al12/cloud/member_diagnostics.csv"))
+# On the refit route the per-member diagnostics are not comparable.  The members' minimum frequency sits on the
+# acoustic branch at the first q-point past the Γ cut, where ω² ≈ 1e-4 is a sum Σ_k θ_k D_k(q) of large per-basis
+# terms of mixed sign: the refit's coefficients (1e-11 from the published ones) relax to an a_eq 3e-9 Å away, its
+# Hessian differs by 2e-8 relative, and the SAME θ scored on the two Hessians differs by a median 0.042 THz
+# (verify/bp_sensitivity.jl).  That moves which members fall under the 0.15 THz margin and get cuts, so these
+# two rows are reported, not judged, there; the committees built from the cloud are judged below on both routes.
+for (lab, col, unit) in (("Al_12 cloud: min ω per member (THz)", 5, "THz"), ("Al_12 cloud: cuts per member", 3, ""))
+    c = check_cloud(lab, col, "$P/al12/cloud/member_diagnostics.csv", "$O/al12/cloud/member_diagnostics.csv"; unit=unit)
+    push!(checks, route == "refit" && c.status !== :missing ?
+          Check(c.label, :info, :info, c.detail * "; not comparable on the refit route (a_eq 3e-9 Å away; near-Γ ω is cancellation-limited)") : c)
+end
 push!(checks, check_ensemble("Al_12 constrained committee (full-cloud hypercube)", :statistical,
                              "$P/al12/hypercube/committee_rejection_full_cloud.csv", "$O/al12/hypercube/committee_rejection_full_cloud.csv"))
 # Coverage is that of ONE 30-member committee's envelope, so it moves from draw to draw: the yardstick is its
