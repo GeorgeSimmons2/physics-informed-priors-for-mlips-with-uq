@@ -26,7 +26,7 @@ bash run.sh setup     # .venv/ (requirements.txt) and Julia (Manifest.toml) in a
 bash run.sh data      # the tier-B inputs from ../physics-informed-priors-repro (or: bash run.sh data <dir>), SHA-256 checked
 bash run.sh replot    # every figure from the committed results in published/ → repro/replot/                ~5 min
 bash run.sh all       # SLURM: the saved and refit routes below → repro/saved/, repro/refit/
-bash run.sh verify saved && bash run.sh verify refit     # → repro/<route>/VERIFY.md
+bash run.sh verify saved && bash run.sh verify refit     # → repro/<route>/VERIFY.md   (last full run: VERIFICATION.md)
 ```
 
 You need `julia` 1.11 on PATH (the Manifest was resolved with 1.11.8), `python3` 3.9 and SLURM.

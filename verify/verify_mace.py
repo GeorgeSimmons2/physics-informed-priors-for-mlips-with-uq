@@ -4,8 +4,10 @@ verify/verify_mace.py — how closely a route reproduces the published MACE resu
 saved route (the published model): θ0 must match exactly, θc and θ_LS to a relative 1e-6 (one QP,
 pinned OSQP schedule), the test RMSEs, a0 and C_ij to the published digits, the POPS committees as
 distributions (z-scores, as verify/lib_verify.jl), and their test coverage to 1 percentage point.
-refit route (MACE retrained from the DFT data): the network differs, so only the physics is judged —
-a0 and C_ij on target, test RMSEs within 15% of the published ones, coverage within 3 points.
+refit route (MACE retrained from the DFT data): the physics is judged — a0 and C_ij on target, test RMSEs
+within 15% of the published ones, coverage within 3 points — and the retrained weights are compared with the
+published model's.  Training is deterministic on fixed hardware and threads, so they can be identical; when the
+retrained readout θ0 equals the published one, the POPS committees are compared as on the saved route.
 
 Run: .venv/bin/python verify/verify_mace.py saved|refit       (markdown table to stdout)
 """
@@ -23,7 +25,7 @@ Z_TOL = 4.5
 
 
 def add(label, tier, ok, detail):
-    rows.append((label, tier, "  — " if ok is None else ("PASS" if ok else "FAIL"), detail))
+    rows.append((label, tier, "info" if tier == "info" else "  — " if ok is None else ("PASS" if ok else "FAIL"), detail))
 
 
 def have(*paths):
@@ -80,14 +82,28 @@ else:
         add("retrained + constrained: matscipy a0, C_ij", "physics", abs(v[0] - 4.032) < 5e-4 and abs(v[1] - 116.3) < 1 and abs(v[2] - 64.8) < 1 and abs(v[3] - 30.9) < 1,
             f"a0 {v[0]:.4f} Å, C11/C12/C44 {v[1]:.1f}/{v[2]:.1f}/{v[3]:.1f} GPa")
 
+# ── the retrained network (refit route) ─────────────────────────────────────
+same_network = route == "saved"
+if route == "refit":
+    mr = os.path.join(R, "repro", route, "mace", "models", "Al_small_stagetwo.model")
+    if have(mr):
+        import torch
+        sa = torch.load(os.path.join(R, "mace", "models", "Al_small_stagetwo.model"), map_location="cpu", weights_only=False).state_dict()
+        sb = torch.load(mr, map_location="cpu", weights_only=False).state_dict()
+        d = max((sa[k].double() - sb[k].double()).abs().max().item() for k in sa if sa[k].numel()) if sa.keys() == sb.keys() else float("inf")
+        add("retrained network: weights vs the published model", "info", None,
+            f"{sum(v.numel() for v in sa.values())} weights, max|Δ| = {d:.3e}" + (" — bit-identical" if d == 0 else ""))
+    a, b = os.path.join(pub, "theta0.csv"), os.path.join(res, "theta0.csv")
+    same_network = have(a, b) and np.array_equal(load(a), load(b))
+
 # ── POPS committees ──────────────────────────────────────────────────────────
 pops, ppub = os.path.join(O, "pops"), os.path.join(P, "pops")
 for name in ("constrained", "unconstrained"):
     a, b = os.path.join(ppub, f"committee_{name}.csv"), os.path.join(pops, f"committee_{name}.csv")
     if not have(a, b):
         add(f"POPS {name} committee", "statistical", None, f"not produced yet: {b}"); continue
-    if route == "refit":
-        add(f"POPS {name} committee", "statistical", None, "retrained network: θ not comparable; see coverage and C_ij spread"); continue
+    if not same_network:
+        add(f"POPS {name} committee", "statistical", None, "retrained network differs: θ not comparable; see coverage and C_ij spread"); continue
     A, B = load(a), load(b)
     n = A.shape[0]
     mA, mB, sA, sB = A.mean(0), B.mean(0), A.std(0, ddof=1), B.std(0, ddof=1)
@@ -121,4 +137,4 @@ print("| quantity | tier | verdict | detail |\n|---|---|---|---|")
 for r in rows:
     print(f"| {r[0]} | `{r[1]}` | **{r[2]}** | {r[3]} |")
 print(f"\n{sum(r[2] == 'PASS' for r in rows)} passed, {sum(r[2] == 'FAIL' for r in rows)} failed, "
-      f"{sum(r[2].strip() == '—' for r in rows)} not yet produced or not comparable.")
+      f"{sum(r[2].strip() == '—' for r in rows)} not yet produced or not comparable, {sum(r[2] == 'info' for r in rows)} reported for information.")
