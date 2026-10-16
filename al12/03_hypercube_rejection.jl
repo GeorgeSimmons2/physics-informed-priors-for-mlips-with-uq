@@ -1,50 +1,5 @@
-# [PORT] constrained-pops-repro al12/03_hypercube_rejection.jl: a verbatim copy of constrained_optimization/al12/03_hypercube_rejection.jl from
-#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
-#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
-# ─────────────────────────────────────────────────────────────────────────────
-# PINNED REPRODUCTION COPY of scripts/uq/hypercube_full_cloud_bands_Al_12_4_6A_2.jl
-#
-# Stage 3 of the Al_12 chain: builds the POPS hypercube around stage 2's constrained
-# cloud, rejection-samples it, and writes committee_rejection_full_cloud.csv — the
-# CONSTRAINED (top-right) panel of bands_four_panel/.
-#
-# Needs stage 1 (theta_mean.csv, committee_repaired.csv) and stage 2
-# (committee_stable.jls).  Both are read from their repro_ directories by default;
-# COMMITTEE_DIR and CLOUD_DIR override.
-#
-# Differences from the original are marked `# [REPRO]` and tabulated in ../README.md.
-# No constraint, sampler, predicate or plotting change.
-# ─────────────────────────────────────────────────────────────────────────────
-# hypercube_full_cloud_bands_Al_12_4_6A_2.jl
-#
-# Take the cutting-plane-constrained FULL top-50%-leverage cloud (73,411 stable
-# members from cutting_plane_full_cloud_Al_12_4_6A_2.jl), build the POPS hypercube
-# around it, rejection-sample, and plot the resulting phonon bands.
-#
-# The legacy pipeline built its hypercube from a 30-member stratified forest. With
-# 73k constrained members the covariance is enormously better resolved, so the
-# retained eigendirections and their bounds are the interesting comparison -- both
-# are reported, and panel (b) repeats the whole procedure on the 30-member
-# committee for a like-for-like picture.
-#
-# FIGURE SIZING. Makie's `size` is in POINTS for vector output, so a figure built
-# at 900 pt and dropped in at width=\linewidth (~510 pt) has its text scaled by
-# 0.57 -- 11 pt labels land at ~6 pt. Everything here is built at its final
-# display width with 11-13 pt fonts, so Overleaf does no rescaling and in-figure
-# text matches MLST body text. Do NOT add a width= scale factor in \includegraphics.
-#
-# PARITY / CALIBRATION are one figure PER hypercube type, each with two panels
-# ((a) energy, (b) force) -- see the block below line 190. Four files:
-#   parity_fullcloud, parity_forest30, calibration_fullcloud, calibration_forest30
-# The legacy combined parity_full_cloud.* / calibration_full_cloud.* are no longer
-# written and are left on disk as-is, so old \includegraphics keep resolving.
-#
-# Run: julia --project -t 8 scripts/uq/hypercube_full_cloud_bands_Al_12_4_6A_2.jl [n_members] [stride]
-#   FIGW=260 rebuilds the parity/calibration figures for a half-width slot (fonts
-#   stay at 13/12/11 pt; that is the point of building at final size).
-
-include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))  # [PORT] lib/bandpath.jl
-include(joinpath(@__DIR__, "..", "lib", "parity_calibration.jl"))  # [PORT] lib/parity_calibration.jl
+include(joinpath(@__DIR__, "..", "lib", "bandpath.jl")) 
+include(joinpath(@__DIR__, "..", "lib", "parity_calibration.jl"))  
 using SparseArrays, LinearAlgebra, Serialization, Random
 Random.seed!(1234)
 
@@ -58,11 +13,11 @@ result = load_model(element, 12, 4, 6, 2; dataset_name=dataset)
 model  = result.model; lin_params = result.lin_params; n_params = length(lin_params)
 P = result.P
 RES    = "$(result.dir)/results"
-# [REPRO] read stage 1 and stage 2 from their repro_ outputs, write beside them
-ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  # [PORT] the route root (run.sh sets OUT)
-COMMITTEE_DIR = get(ENV, "COMMITTEE_DIR", "$ROUT/al12/committee")   # [PORT] was $RES/repro_bandpath_undotted_ncell4_densek
-CLOUD_DIR     = get(ENV, "CLOUD_DIR",     "$ROUT/al12/cloud")       # [PORT] was $RES/repro_cutting_plane_full_cloud
-outdir = get(ENV, "OUTDIR", "$ROUT/al12/hypercube"); mkpath(outdir)  # [PORT] was CLOUD_DIR
+
+ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))
+COMMITTEE_DIR = get(ENV, "COMMITTEE_DIR", "$ROUT/al12/committee")  
+CLOUD_DIR     = get(ENV, "CLOUD_DIR",     "$ROUT/al12/cloud")       
+outdir = get(ENV, "OUTDIR", "$ROUT/al12/hypercube"); mkpath(outdir)  
 
 # ── geometry, Born rows, band path (same as everywhere else) ─────────────────
 a_eq = ACEWorkflow.relax_lattice_constant(model, element)
@@ -82,10 +37,10 @@ bp = bandpath_Dk(result, model, element, a_eq, N_cell_fc; N_per_seg=N_per_seg)
 @printf("a_eq = %.5f Å; band path %d q-points\n", a_eq, length(bp.Bq)); flush(stdout)
 
 # ── the two clouds ───────────────────────────────────────────────────────────
-θ_mean = vec(readdlm("$COMMITTEE_DIR/theta_mean.csv", ','))                    # [REPRO] stage 1
-full   = deserialize("$CLOUD_DIR/committee_stable.jls")                        # [REPRO] stage 2
-Θ_full = full.Θ                                            # 91 × N, stable only
-Θ_30   = Matrix(readdlm("$COMMITTEE_DIR/committee_repaired.csv", ',')')        # [REPRO] stage 1
+θ_mean = vec(readdlm("$COMMITTEE_DIR/theta_mean.csv", ','))                    
+full   = deserialize("$CLOUD_DIR/committee_stable.jls")                     
+Θ_full = full.Θ                               
+Θ_30   = Matrix(readdlm("$COMMITTEE_DIR/committee_repaired.csv", ',')')       
 @printf("full cloud %d members | legacy forest %d members\n", size(Θ_full,2), size(Θ_30,2))
 flush(stdout)
 
@@ -120,18 +75,6 @@ end
 mem_full, heig_f, hb_f, acc_f = build_and_sample(Θ_full, "full cloud")
 mem_30,   heig_3, hb_3, acc_3 = build_and_sample(Θ_30,   "30-member")
 
-# ── why is the sampled full-cloud committee so much more dispersed? ──────────
-# Two separable causes:
-#   (i)  RANK. 30 points span at most 30 directions in 91-dim parameter space, so
-#        the forest hypercube is rank-deficient and cannot move at all in the
-#        remaining directions. The full cloud resolves many more.
-#   (ii) BOX LOOSENESS. hypercube() takes percentile_clipping = 0, so the bounds
-#        are the EXTREMA of the projections. Extrema grow with sample size, and a
-#        box in d dimensions puts essentially all of its volume in corners that no
-#        actual POPS member occupies. Sampling the box therefore explores far
-#        outside the cloud it was built from.
-# Compare the ACTUAL constrained members against the hypercube-SAMPLED ones: if the
-# real members are tight and the sampled ones wild, (ii) dominates.
 function band_span(members)
     hi = Float64[]; lo = Float64[]
     for θ in members
@@ -153,37 +96,20 @@ println("\n── dispersion: actual members vs hypercube draws ──")
 @printf("  → sampled/actual median ω_max ratio = %.2f\n", median(hi_s)/median(hi_a))
 flush(stdout)
 
-# ── figures: MLST-sized text ─────────────────────────────────────────────────
-# FIGW is the width each figure will be DISPLAYED at, in points.  Fonts stay at
-# 13/12/11 pt whatever FIGW is — that is the entire point of building at final size.
-# Shared by the bands, parity and calibration figures.  The 540 pt default assumes
-# each figure spans \linewidth on its own; for a half-width slot rebuild with
-# FIGW=260 rather than scaling in LaTeX, and do NOT add a width= factor either way.
 FIGW = parse(Float64, get(ENV, "FIGW", "540"))
 BLU = RGBf(0.0, 0.447, 0.698); GRY = RGBAf(0.45, 0.45, 0.45, 0.35)
 TITLE, LAB, TICK = 13, 12, 11
 
-# Y-LIMITS ARE DELIBERATELY SHARED, computed over BOTH committees.  These are two
-# separate files now, so nothing forces them onto a common axis any more; without this
-# each would autoscale to its own spread and the narrow committee would look just as
-# dispersed as the wide one.  The whole comparison is how much WIDER the box built from
-# 73k deltas is, so keep this if you change what is plotted.
 F_all = vcat([bands(θ, bp) for θ in mem_full], [bands(θ, bp) for θ in mem_30])
 lo = minimum(minimum.(F_all)); hi = maximum(maximum.(F_all))
 pad = 0.06*(hi-lo); ylim = (min(lo-pad, -0.4), hi+pad)
 
-# One figure per hypercube type.  Both are constrain → hypercube → rejection-sample
-# and differ ONLY in which set of constrained deltas the hypercube was built from, so
-# the title says that rather than naming the figure after its source cloud.
 function bands_figure(members, ttl, acc, tag)
     fig = Figure(size=(FIGW, 0.62FIGW), figure_padding=(6, 10, 4, 6))
     Label(fig[1, 1],
           "constrained POPS deltas → hypercube → rejection sample ($(length(members)) drawn)";
           fontsize=TICK, padding=(0, 0, 0, 2))
-    # Acceptance goes in the TITLE, not a corner annotation as in the legacy combined
-    # figure.  ylim is the data max plus 6%, so the top band always sits at ~94% height
-    # and a top-right label lands on it; bottom-right collides with the Γ tick label and
-    # the zero line.  A single-panel figure has the title width to spare, so use it.
+   
     ax = Axis(fig[2, 1]; xlabel="Wave vector", ylabel="Frequency (THz)",
               title="$ttl  —  accept $(round(acc; digits=2))%",
               titlesize=TITLE, xlabelsize=LAB, ylabelsize=LAB,
@@ -204,9 +130,7 @@ function bands_figure(members, ttl, acc, tag)
     save("$outdir/bands_$(tag).png", fig; px_per_unit=4)
     @printf("bands   [%-10s] → %s/bands_%s.{pdf,png}\n", tag, outdir, tag)
 end
-# Tags match the parity/calibration figures.  NOT bands_hypercube_full_cloud: that was
-# the legacy COMBINED figure, and reusing its name for a single-cloud figure would
-# silently change what an existing \includegraphics resolves to.  It is left on disk.
+
 bands_figure(mem_full, "hypercube from $(size(Θ_full,2)) deltas", acc_f, "fullcloud")
 bands_figure(mem_30,   "hypercube from $(size(Θ_30,2)) deltas",   acc_3, "forest30")
 flush(stdout)
@@ -214,10 +138,7 @@ flush(stdout)
 writedlm("$outdir/committee_rejection_full_cloud.csv", reduce(hcat, mem_full)', ',')
 
 # ── test-set parity + calibration ────────────────────────────────────────────
-# lib.jl's parity_plot/calibration_hist hardcode 10-11 pt fonts on a 330-380 pt
-# canvas, i.e. sized for a half-width panel. Re-done here at full display width
-# with MLST-sized text; the statistics are computed exactly as lib.jl does.
-TEST   = joinpath(@__DIR__, "..", "data", "Al", "manual_df_test_Al.xyz")  # [PORT] data/ at the repo root
+TEST   = joinpath(@__DIR__, "..", "data", "Al", "manual_df_test_Al.xyz") 
 stride = length(ARGS) >= 2 ? parse(Int, ARGS[2]) : 20
 @printf("\n── test-set predictions (stride %d) ──\n", stride); flush(stdout)
 pr_f = committee_predictions_fast(model, mem_full, TEST; stride=stride, point_params=θ_mean,
@@ -230,17 +151,6 @@ cover(t, lo, hi) = 100*(1 - mean((t .< lo) .| (t .> hi)))
 rmse(p, t)       = sqrt(mean((p .- t).^2))
 
 # ── SPLIT FIGURES ────────────────────────────────────────────────────────────
-# One figure per hypercube type, each with two panels, (a) energy and (b) force, so the
-# two can be placed, sized and captioned independently.  The plotting machinery lives in
-# lib_parity_calibration.jl — extracted there so the Al_12 and Al_20 figures cannot
-# drift apart in styling.  FIGW is defined with the bands figures above and shared.
-#
-# NOTE ON FILENAMES.  The tags are `fullcloud`/`forest30`, deliberately NOT
-# `full_cloud`: the legacy COMBINED figures were parity_full_cloud.{pdf,png} and
-# calibration_full_cloud.{pdf,png}, and reusing those names for a single-cloud figure
-# would silently change what an already-included \includegraphics resolves to.  The
-# old files are left on disk untouched.
-
 clouds = ((pr_f, "hypercube from $(size(Θ_full,2)) deltas", "fullcloud"),
           (pr_3, "hypercube from $(size(Θ_30,2)) deltas",   "forest30"))
 for (pr, ttl, tag) in clouds
@@ -248,10 +158,6 @@ for (pr, ttl, tag) in clouds
     calibration_figure(pr, ttl, tag, outdir; FIGW=FIGW)
 end
 flush(stdout)
-
-# The legacy script persisted only the summary CSV, so re-plotting meant re-running
-# the whole committee_predictions pass over the test set.  Keep the raw predictions so
-# the figures above can be rebuilt (e.g. at a different FIGW) without that.
 serialize("$outdir/parity_calibration_predictions.jls",
           (; pr_f, pr_3, stride, n_members,
              label_full = "hypercube from $(size(Θ_full,2)) deltas",

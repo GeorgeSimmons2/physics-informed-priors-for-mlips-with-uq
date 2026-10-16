@@ -1,8 +1,4 @@
 # [PORT] constrained-pops-repro rls_npt/01_constrained_rls.jl: a verbatim copy of scripts/uq/rls_constrained_pops_Al_12/compare_rls_Al_12_4_6A_2.jl from
-#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
-#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
-# compare_rls_Al_12_4_6A_2.jl — phonons of the RLS fit vs the constrained RLS fit, no POPS.
-#
 #   RLS          lin_params
 #   constrained  RLS with b′(a_eq)·θ = 0 (a_eq held), Born, ω > 0 at 1.00 and 1.02 a_eq (cutting plane)
 #

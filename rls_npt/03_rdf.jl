@@ -1,6 +1,3 @@
-# [PORT] constrained-pops-repro rls_npt/03_rdf.jl: a verbatim copy of thermal_expansion_vs_experiment/make_rdf_coordination.jl from
-#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
-#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
 # ─────────────────────────────────────────────────────────────────────────────
 # make_rdf_coordination.jl — the producer of rdf_<T>K.csv and coordination_<T>K.csv.
 #

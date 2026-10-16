@@ -1,44 +1,4 @@
-# [PORT] constrained-pops-repro rls_npt/02_npt.jl: a verbatim copy of npt_al16/npt_member_Al_16.jl from
-#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
-#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
-# ─────────────────────────────────────────────────────────────────────────────
-# npt_member_Al_16.jl — NPT thermal expansion of ONE Al_16_4_6A_3_ ensemble member.
-#
-# Adapted from npt_trajectories/npt_constrained_softest.jl (Al_12), which is left untouched.
-# The MD protocol and the per-temperature analysis (`analyze_md`, copied verbatim) are
-# unchanged: 4×4×4 FCC, 256 atoms, 0 Pa, Langevin + MonteCarloBarostat, dt 1 fs, friction
-# 0.01 fs⁻¹, 10k equilibration + 20k production, logged every 50, per-frame box.
-#
-# What changed for Al_16, and why:
-#
-#   * MODEL.  Al_16_4_6A_3_, loaded from its JSON + lin_params only — not via load_model,
-#     which also reads the 1.9 GB design matrix this script never uses.
-#
-#   * PHONONS.  The Al_12 driver evaluates min ω through the undotted per-basis Hessian at
-#     every lattice constant it visits.  For 684 parameters that basis is 3.2 GB per
-#     lattice constant, and the NPT visits a new one at every temperature.  This uses a
-#     NATIVE Hessian of the single member instead (same as qoi/bands_two_ensembles), which
-#     is the exact operator for one θ and costs seconds.  min ω excludes q within qΓtol of
-#     Γ, like min_freq_stable, so the acoustic branches going to zero do not count.
-#
-#   * NO MULTI-VOLUME COMMITTEE BLOCK.  That block reported min ω at the volumes the Al_12
-#     multi-volume committee was constrained at.  The Al_16 ensembles are pinned at a_eq
-#     only, so there is no constrained volume range to report.
-#
-#   * RE-SEEDED PER TEMPERATURE (MD_SEED + T).  The Al_12 driver seeds once before the
-#     sweep, so its 300 K trajectory depends on which temperatures ran before it in the
-#     same job.  Here each temperature's trajectory depends only on (θ, T, MD_SEED), so a
-#     300 K run on its own and a 100/200/300 K sweep give the same 300 K trajectory, and
-#     temperatures can be added later without invalidating earlier ones.
-#
-#   * PER-TEMPERATURE OUTPUT.  Each T writes T<T>K/summary_row.csv, so temperatures from
-#     separate jobs combine; aggregate.jl fits α across whatever exists.
-#
-# Env:  MODELDIR (default models/Al_16_4_6A_3_)  THETA_FILE (required)  TAG  OUTDIR  TEMPS ("300" or "100,200,300")  MD_SEED (1234)
-#       N_EQUIL (10000)  N_PROD (20000)
-# Run:  sbatch npt_al16/run_npt_member.slurm   (see that file for the two members)
-
-include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))  # [PORT] lib/bandpath.jl
+include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))
 using Molly, Random
 using AtomsBuilder: bulk
 import AtomsBuilder
@@ -46,24 +6,20 @@ import AtomsBuilder
 @async while true; flush(stdout); flush(stderr); sleep(5); end   # SLURM block-buffers stdout
 
 element        = :Al
-MODELDIR       = normpath(get(ENV, "MODELDIR", model_dir("Al_16_4_6A_3_")))   # [PORT] default honours ACE_MODELS  # any models/<name>_ dir
+MODELDIR       = normpath(get(ENV, "MODELDIR", model_dir("Al_16_4_6A_3_")))
 MODELNAME      = basename(rstrip(MODELDIR, '/'))
 N_CELL         = 4
-N_PER_SEG      = 20                   # the published Al_16 bands grid
+N_PER_SEG      = 20                 
 qΓtol          = 5e-2
 structure      = AtomsBuilder.Chemistry.symmetry(element)
 
 THETA_FILE     = get(ENV, "THETA_FILE", "")
 isempty(THETA_FILE) && error("set THETA_FILE to the member's parameter vector")
 TAG            = get(ENV, "TAG", splitext(basename(THETA_FILE))[1])
-ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  # [PORT] the route root (run.sh sets OUT)
-outdir         = get(ENV, "OUTDIR", "$ROUT/rls_npt/npt/$TAG"); mkpath(outdir)   # [PORT] was <script dir>/runs/<TAG>
+ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  
+outdir         = get(ENV, "OUTDIR", "$ROUT/rls_npt/npt/$TAG"); mkpath(outdir)  
 temperatures_K = parse.(Float64, split(get(ENV, "TEMPS", "300"), ','))
 MD_SEED        = parse(Int, get(ENV, "MD_SEED", "1234"))
-# SEED_MODE=same : every temperature (and, if the caller passes the same MD_SEED, every
-#                  member) starts from the identical random stream — common random numbers,
-#                  so member-to-member differences reflect θ rather than trajectory noise.
-# SEED_MODE=per_T: seed MD_SEED+T (the original single-member runs).
 SEED_MODE      = get(ENV, "SEED_MODE", "per_T")
 SEED_MODE in ("same", "per_T") || error("SEED_MODE must be same or per_T")
 

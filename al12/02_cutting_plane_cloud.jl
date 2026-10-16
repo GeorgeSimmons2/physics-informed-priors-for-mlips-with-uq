@@ -52,12 +52,6 @@
 
 include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))  # [PORT] lib/bandpath.jl
 using SparseArrays, LinearAlgebra, OSQP, Serialization, Printf
-# [REPRO] OSQP's rho schedule is the only timing-dependent input in the QP path.  Left at
-# its default (`adaptive_rho_interval = 0`, what the original runs) OSQP derives the
-# iterations between rho updates from MEASURED wall-clock time, so two runs take different
-# iterate paths and — after a cutting-plane cascade — accept different vectors.  Pinning it
-# removes that.  It does NOT recover the previously published members; it makes future runs
-# reproducible.  RHO_INTERVAL=0 restores the original behaviour.  See ../README.md.
 RHO_INTERVAL = parse(Int, get(ENV, "RHO_INTERVAL", "25"))
 
 
@@ -78,8 +72,8 @@ result = load_model(element, 12, 4, 6, 2; dataset_name=dataset)
 model  = result.model; lin_params = result.lin_params; n_params = length(lin_params)
 P = result.P; Ap = Diagonal(result.W)*result.A/P; Yw = result.W.*result.Y
 M = size(Ap, 1); λ = 1.0/M
-ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  # [PORT] the route root (run.sh sets OUT)
-outdir = get(ENV, "OUTDIR", "$ROUT/al12/cloud"); mkpath(outdir)  # [PORT] was $(result.dir)/results/repro_cutting_plane_full_cloud
+ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  
+outdir = get(ENV, "OUTDIR", "$ROUT/al12/cloud"); mkpath(outdir) 
 @printf("%s: %d observations x %d params\n", result.name, M, n_params); flush(stdout)
 
 # ── reference geometry, Born + a_eq rows (verbatim from the legacy script) ────
@@ -105,10 +99,10 @@ bp = bandpath_Dk(result, model, element, a_eq, N_cell_fc; N_per_seg=N_per_seg)
 println("── leverage (Cholesky + 91 × M solve) ──"); flush(stdout)
 t = @elapsed begin
     C   = Symmetric(Ap'*Ap .+ λ.*(P'*P)); Cf = cholesky(C)
-    AtX = Cf \ Matrix(Ap')                      # 91 × M
+    AtX = Cf \ Matrix(Ap')                  
     lev = vec(sum(Ap' .* AtX; dims=1))
 end
-AtX = nothing; GC.gc()                          # 107 MB, not needed past selection
+AtX = nothing; GC.gc()                     
 thresh   = quantile(lev, 1 - lev_percentile)
 selected = findall(>=(thresh), lev)
 n_members_arg > 0 && (selected = selected[1:min(n_members_arg, length(selected))])
@@ -116,14 +110,11 @@ N = length(selected)
 @printf("leverage in [%.3e, %.3e]; threshold %.3e → %d members  [%.1f s]\n",
         minimum(lev), maximum(lev), thresh, N, t); flush(stdout)
 
-# ── precompute everything constant in the hot loop ───────────────────────────
-# The legacy constrain_member re-does `born_rows/P` and `b_prime'/P` on EVERY
-# call; over 73k members that is pure waste, so hoist them.
 Hqp        = sparse(Ap'*Ap .+ λ.*(P'*P))
 qqp        = -(Ap'*Yw)
 born_rows_P = sparse(born_rows / P)
 b_prime_P   = sparse(reshape(b_prime' / P, 1, n_params))
-Pfac        = factorize(P)                       # reused for every `P \ x`
+Pfac        = factorize(P)                      
 
 models = [OSQP.Model() for _ in 1:Threads.nthreads()]
 
@@ -134,7 +125,7 @@ function solve_one!(osqp, i, extra_rows_P, extra_lower)
     u = vcat([Yw[i]], [0.0], fill(Inf, length(born_lower) + length(extra_lower)))
     OSQP.setup!(osqp; P=Hqp, q=qqp, A=A_full, l=l, u=u, max_iter=4_000_000,
                 check_termination=25, verbose=false, eps_abs=1e-6, eps_rel=1e-6,
-                adaptive_rho_interval=RHO_INTERVAL)   # [REPRO] pinned rho schedule
+                adaptive_rho_interval=RHO_INTERVAL)   
     r = OSQP.solve!(osqp)
     return Pfac \ r.x, r.info.status
 end
@@ -156,7 +147,7 @@ Threads.@threads for k in 1:N
             soft = soft_modes(θ, bp, ω2_cut; qΓtol=qΓtol)
             isempty(soft) && break
             niters[k] += 1
-            it == max_cuts && break              # give up; θ stays soft, flagged below
+            it == max_cuts && break            
             for (iq, e) in soft
                 extra_rows_P = vcat(extra_rows_P, (cut_row(iq, e, bp)' / P))
                 push!(extra_lower, ω2_cut)

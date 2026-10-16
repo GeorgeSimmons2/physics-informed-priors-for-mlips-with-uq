@@ -1,64 +1,16 @@
-# [PORT] constrained-pops-repro al12/01_committee.jl: a verbatim copy of constrained_optimization/al12/01_committee_ncell4_densek.jl from
-#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
-#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
-# ─────────────────────────────────────────────────────────────────────────────
-# PINNED REPRODUCTION COPY of scripts/uq/bandpath_committee_undotted_Al_12_4_6A_2_ncell4_densek.jl
-#
-# Stage 1 of the Al_12 chain behind the TOP ROW of bands_four_panel/.  It produces
-# theta_mean.csv (the constrained mean model) and committee_repaired.csv (the 30-member
-# forest) — BOTH of which stages 3 and 4 read, which is why it runs first despite being
-# the cheapest.
-#
-# Differences from the original are marked `# [REPRO]` and tabulated in ../README.md:
-# the include path, a pinned OSQP rho schedule, and an overridable repro_ output
-# directory.  No constraint, sampler or physics change.
-# ─────────────────────────────────────────────────────────────────────────────
-# bandpath_committee_undotted_Al_12_4_6A_2_ncell4_densek.jl
-#
-# AMENDED COPY of bandpath_committee_undotted_Al_12_4_6A_2.jl (legacy left untouched):
-#   • N_cell_fc = 4 (was 3): the 3×3×3 supercell was too small for the 6 Å cutoff
-#     (box-half ~6.07 Å ≈ cutoff) → contaminated zone-boundary phonons.  N_cell=4/5 is
-#     converged (see scripts/uq/phonon_pipeline_ncell_diagnosis_Al_12_4_6A_2.jl).
-#   • N_per_seg = [20,20,20,20,60]: denser sampling of the final Γ→K segment, where the
-#     soft modes concentrate, so the cutting-plane constrain + rejection predicate can
-#     catch a sharp dip between q-points (needs the per-segment fcc_band_path in src).
-#   • outputs → results/bandpath_undotted_ncell4_densek/ (does not clobber the legacy run).
-#
-# Phonon-stable POPS committee on the UNDOTTED Hessian.  H_k = ∂²B_k/∂r² depends
-# only on geometry, so at fixed a_eq it is built ONCE; every member's phonon
-# check is D(q,θ) = Σ_k θ_k D_k(q) (matvec + tiny eigen) — cheap enough to be a
-# rejection predicate.  Validity needs a fixed a_eq (b′·θ=0 pins each member's
-# equilibrium onto the reference geometry).  Pipeline:
-#   0. undotted H_basis (once, parallel) → D_k(q) on the FULL band path
-#   1. constrain a_eq: mean fit + POPS proposal all pinned to b′=0, b″>0, Born
-#   2. phonon sweep check (undotted) → flag naughty members
-#   3. constrain naughty: cutting-plane OSQP, positive-curvature rows, a_eq held
-#   4. rejection sample the committee, band-path phonon check as the predicate
-#   5. verify every final sample; 6. compare vs naive POPS + coverage
-#
-# All phonon/undotted machinery + the (Γ-correct) plotting live in
-# ../bandpath_phonon_uq/lib.jl so every model run shares one source of truth.
-# To run for a different model: change `dataset` below.
-#
 # Run:  sbatch scripts/uq/run_committee_ncell4_densek.slurm   (hmem; N_cell=4 → heavier H_basis build)
 
 include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))  # [PORT] lib/bandpath.jl
 using SparseArrays, OSQP, Random
-# [REPRO] OSQP's rho schedule is the only timing-dependent input in the QP path.  Left at
-# its default (`adaptive_rho_interval = 0`, what the original runs) OSQP derives the
-# iterations between rho updates from MEASURED wall-clock time, so two runs take different
-# iterate paths and — after a cutting-plane cascade — accept different vectors.  Pinning it
-# removes that.  It does NOT recover the previously published members; it makes future runs
-# reproducible.  RHO_INTERVAL=0 restores the original behaviour.  See ../README.md.
 RHO_INTERVAL = parse(Int, get(ENV, "RHO_INTERVAL", "25"))
 
 Random.seed!(1234)
 
 element        = :Al
-dataset        = ""            # "" → full-dataset model (Al_20_4_6A_2_); e.g. "subset_50_percent"
-a_experimental = nothing       # Float (Å) to pin a_eq experimentally; nothing → mean model
-N_cell_fc      = 4                         # was 3 — too small for the 6 Å cutoff (contaminated phonons)
-N_per_seg      = [20, 20, 20, 20, 60]      # dense Γ→K (last segment); Int still works for uniform
+dataset        = ""            
+a_experimental = nothing       
+N_cell_fc      = 4                         
+N_per_seg      = [20, 20, 20, 20, 60]      
 cut_margin_THz = 0.15
 n_lev, n_res, n_rand = 5, 10, 15
 max_cuts       = 40
@@ -67,8 +19,8 @@ test_stride    = 10
 result     = load_model(element, 12, 4, 6, 2; dataset_name=dataset)
 model      = result.model; lin_params = result.lin_params; n_params = length(lin_params)
 P = result.P; Ap = Diagonal(result.W)*result.A/P; Yw = result.W.*result.Y; λ = 1.0/size(Ap,1)
-ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  # [PORT] the route root (run.sh sets OUT)
-outdir = get(ENV, "OUTDIR", "$ROUT/al12/committee"); mkpath(outdir)  # [PORT] was $(result.dir)/results/repro_bandpath_undotted_ncell4_densek
+ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  
+outdir = get(ENV, "OUTDIR", "$ROUT/al12/committee"); mkpath(outdir)  
 @printf("Model %s: %d params, %d threads.  Outputs → %s\n", result.name, n_params, Threads.nthreads(), outdir)
 
 # ── reference geometry, Born + a_eq rows ─────────────────────────────────────

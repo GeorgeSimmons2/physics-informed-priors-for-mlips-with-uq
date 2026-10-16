@@ -1,15 +1,3 @@
-# [PORT] constrained-pops-repro rls_npt/04_fig_200K.jl: a verbatim copy of scripts/uq/rls_constrained_pops_Al_12/fig_200K_rls_vs_constrained.jl from
-#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
-#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
-# fig_200K_rls_vs_constrained.jl — RLS vs constrained RLS after 200 K NPT (Al_12_4_6A_2).
-#
-# Layout and styling follow thermal_expansion_vs_experiment/fcc_compare_constrained_vs_naive.jl
-# (left untouched — it reads a different run format):
-#   LEFT  (full height)  phonon bands of both models, each at its own a(200 K), shared axis
-#   RIGHT top            time-averaged RDF, RLS             (red)
-#   RIGHT bottom         time-averaged RDF, constrained RLS (blue)
-# Phonons: 4×4×4 force constants, dense Γ→K (N_per_seg 20,20,20,20,60), as the paper figure.
-#
 # Inputs (written by the pipeline in README.md):
 #   npt/<m>/theta_used.csv          θ the MD ran with
 #   npt/<m>/T200K/summary_row.csv   a(200 K) = mean ∛V/4 over production frames (step ≥ 10 000)

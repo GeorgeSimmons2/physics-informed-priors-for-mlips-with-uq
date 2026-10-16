@@ -1,75 +1,3 @@
-# [PORT] constrained-pops-repro al12/04_naive_ensemble.jl: a verbatim copy of constrained_optimization/al12/04_naive_ensemble.jl from
-#        physics-informed-priors-repro (457087f).  Only paths differ, each marked [PORT]:
-#        outputs go under the route root $OUT (repro/<route>/), models via model_dir (ACE_MODELS).
-# ─────────────────────────────────────────────────────────────────────────────
-# PINNED REPRODUCTION COPY of scripts/uq/naive_vs_constrained_fullcloud_Al_12_4_6A_2.jl
-#
-# Stage 4 of the Al_12 chain: draws the UNCONSTRAINED (naive) POPS ensemble and writes
-# samples_naive.csv + min_freq_naive.csv — the left-hand panel of the top row of
-# bands_four_panel/ — reusing stage 3's constrained committee for the right-hand one so
-# the two panels are the same ensembles the published figure used.
-#
-# NOTE ON THE NAIVE ARM.  It is drawn with `sample_hypercube`, whose member i is row i of
-# `rand(n_members, d)` — so the ensemble depends on `n_members` as well as the seed.  The
-# published run used 30 (the script default, unchanged here); do not vary it and expect a
-# subset.  See ../README.md.
-#
-# Differences from the original are marked `# [REPRO]` and tabulated in ../README.md.
-# No constraint, sampler or physics change.
-# ─────────────────────────────────────────────────────────────────────────────
-# naive_vs_constrained_fullcloud_Al_12_4_6A_2.jl
-#
-# Unconstrained POPS vs constrained POPS, side by side on ONE shared frequency axis.
-# Each ensemble is evaluated at the geometry its members actually hold:
-#
-#   CONSTRAINED  prebuilt undotted per-basis Hessian at a_eq, 4×4×4.  These members
-#                have b′·θ = 0 imposed, so a_eq IS their equilibrium and Σ_k θ_k D_k(q)
-#                is the exact operator for every one of them — one build serves the
-#                whole ensemble.  The pin residual is checked below, so this is a
-#                verified assumption rather than an asserted one.
-#
-#   NAIVE        native Hessian per member, each relaxed to its OWN lattice constant,
-#                4×4×4.  Nothing pins these: each has its own equilibrium, and
-#                evaluating them at the mean model's a_eq would fold residual stress
-#                into the phonons.  A soft mode read off that would be unattributable
-#                between "bad parameters" and "wrong volume", which is precisely the
-#                claim the figure makes.
-#
-# Both routes compute the same physical quantity — the member's phonons at its own
-# equilibrium — and on the constrained side they agree to ~1e-14 THz (verified against
-# a full 4×4×4 cache: rows 1.5e-16, D_k(q) 3.0e-16).  So this is not a method confound;
-# it is using the cheap exact route where it is exact and paying for the build only
-# where it is needed.
-#
-# ── WHY THIS IS A NEW SCRIPT AND NOT TWO EXISTING PDFs PASTED TOGETHER ───────
-# results/bands_individual_hessian/bands_naive_individual_hessian.pdf next to
-# results/cutting_plane_full_cloud/bands_fullcloud.pdf compares four things at once,
-# only one of which is the constraint:
-#
-#            bands_naive_individual_hessian      bands_fullcloud
-#   members  10                                  30
-#   cell     3×3×3 (half-box 6.03 Å vs a 6 Å     4×4×4 (half-box 8.04 Å — clean)
-#            cutoff — periodic images contaminate)
-#   q-path   N_per_seg = 20 uniform              [20,20,20,20,60], dense Γ→K
-#   y-limits its own                             its own
-#
-# and each script computes its own y-limits, so they cannot be matched by cropping.
-# Here: same top-50%-leverage delta population, same member count, same clean 4×4×4
-# cell, same q-path, ONE shared y-limit over both.
-#
-# ── PARALLELISM ─────────────────────────────────────────────────────────────
-# n_members + 1 native builds on a 256-atom cell, chunked over tasks.  Each task gets
-# its OWN deep copy of the model: native evaluation calls set_linear_parameters!,
-# which mutates, so a shared model would be a silent data race producing wrong bands
-# rather than a crash.  Chunked @spawn, not @threads + threadid(), which is unsound
-# under task migration.
-#
-# Run:  julia --project -t <ncores> scripts/uq/naive_vs_constrained_fullcloud_Al_12_4_6A_2.jl [n_members]
-#   HESS_THREADS caps concurrent native builds (default: all Julia threads).
-#   Needs committee_rejection_full_cloud.csv from
-#   scripts/uq/hypercube_full_cloud_bands_Al_12_4_6A_2.jl — the constrained panel reuses
-#   those exact members, so it is the same ensemble as bands_fullcloud, not a re-draw.
-
 include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))  # [PORT] lib/bandpath.jl
 using Random, Serialization
 Random.seed!(1234)
@@ -91,10 +19,10 @@ Ap = Diagonal(result.W) * result.A / P
 Yw = result.W .* result.Y
 RES    = "$(result.dir)/results"
 # [REPRO] read stages 1 and 3 from their repro_ outputs, write beside them
-ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  # [PORT] the route root (run.sh sets OUT)
-SRC           = get(ENV, "SRC",           "$ROUT/al12/hypercube")   # [PORT] was $RES/repro_cutting_plane_full_cloud
-COMMITTEE_DIR = get(ENV, "COMMITTEE_DIR", "$ROUT/al12/committee")   # [PORT] was $RES/repro_bandpath_undotted_ncell4_densek
-outdir = get(ENV, "OUTDIR", "$ROUT/al12/naive"); mkpath(outdir)  # [PORT] was $RES/repro_naive_vs_constrained
+ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved"))) 
+SRC           = get(ENV, "SRC",           "$ROUT/al12/hypercube")   
+COMMITTEE_DIR = get(ENV, "COMMITTEE_DIR", "$ROUT/al12/committee")   
+outdir = get(ENV, "OUTDIR", "$ROUT/al12/naive"); mkpath(outdir) 
 structure = AtomsBuilder.Chemistry.symmetry(element)
 @printf("Model %s: %d params, %d observations, %d Julia threads (%d for native Hessians)\n",
         result.name, n_params, size(Ap,1), Threads.nthreads(), HESS_THREADS); flush(stdout)
@@ -165,8 +93,6 @@ function native_bands_many(θs, a_ref; label="")
 end
 
 # ── ensemble A: NAIVE.  Same top-50%-leverage cloud, no constraints at all ───
-# `corrections` is the library's own POPS routine; leverage_percentile = 0.5 selects
-# exactly the population that cutting_plane_full_cloud_Al_12_4_6A_2.jl then constrained.
 println("\n── naive: unconstrained POPS cloud → hypercube → sample ──"); flush(stdout)
 naive_deltas = corrections(Ap, Yw, P; leverage_percentile=lev_percentile)
 @printf("  cloud: %d unconstrained deltas, %d params\n", size(naive_deltas)...)
@@ -190,12 +116,7 @@ mem_c  = [collect(Float64, rej[i, :]) for i in 1:min(n_members, size(rej,1))]
 length(mem_c) == n_members ||
     @warn "constrained committee has only $(length(mem_c)) members; naive has $n_members — panels are not member-matched"
 
-# ── IS THE PREBUILT a_eq HESSIAN ACTUALLY VALID FOR THESE MEMBERS? ──────────
-# The whole justification for not rebuilding on the constrained side is b′·θ = 0.
-# Δa ≈ −b′·θ / b″·θ is the Newton step from a_eq to the member's own equilibrium; if
-# that is not ~0 the prebuilt operator is being used at the wrong geometry and the
-# constrained panel is wrong.  Checked, not assumed.
-Δa_c = [-dot(b_prime, θ)/dot(b_double_prime, θ) for θ in mem_c]
+
 @printf("\nPIN CHECK (constrained): |Δa| ≤ %.3e Å (%.4f%% of a_eq)  %s\n",
         maximum(abs.(Δa_c)), 100*maximum(abs.(Δa_c))/a_eq,
         maximum(abs.(Δa_c))/a_eq < 1e-3 ? "← pinned; prebuilt a_eq Hessian is exact" :
@@ -235,9 +156,6 @@ println("    side sits at a_eq by construction, so one prebuilt Hessian covers i
 flush(stdout)
 
 # ── figures: one shared y-axis over BOTH ensembles ──────────────────────────
-# Naive members each have their own reciprocal lattice, so their q-points differ in
-# Cartesian terms; N_per_seg is identical so the paths correspond point-for-point and
-# everything is drawn against the a_eq path coordinate.
 BLU = RGBf(0.0, 0.447, 0.698); GRY = RGBAf(0.45,0.45,0.45,0.30); RED = RGBAf(0.80,0.15,0.15,0.45)
 TITLE, LAB, TICK = 13, 12, 11
 xref = bp.x_vals; xticks = bp.x_ticks; labels = bp.labels; Np = bp.Np
