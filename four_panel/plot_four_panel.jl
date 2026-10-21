@@ -48,7 +48,7 @@
 #
 # Run:  julia --project bands_four_panel/plot_four_panel_bands.jl
 #   SRC12/SRC16  input .jls        OUT  output stem (default bands_four_panel/bands_four_panel)
-#   FIGW  540 (points, = the width the figure is DISPLAYED at in the paper)
+#   FIGW  510 (points, = the width the figure is DISPLAYED at in the paper)
 #   ASPECT 0.78    SHARE_Y 0    LETTERS 0    UNSTABLE  from the runs
 
 using Serialization, Statistics, Printf, CairoMakie
@@ -58,7 +58,7 @@ ROUT   = get(ENV, "OUT", normpath(joinpath(@__DIR__, "..", "repro", "saved")))  
 SRC12   = get(ENV, "SRC12", "$ROUT/al12/naive/bands_four_panel_Al_12.jls")    # [PORT] four_panel/build_bands_cache_Al_12.jl
 SRC16   = get(ENV, "SRC16", "$ROUT/al16/bands/bands_two_ensembles.jls")       # [PORT] al16/02_bands.jl
 FIG     = get(ENV, "FIG", "$ROUT/four_panel/bands_four_panel")   # [PORT] was OUT, which is now the route root
-FIGW    = parse(Float64, get(ENV, "FIGW", "540"))
+FIGW    = parse(Float64, get(ENV, "FIGW", "510"))
 ASPECT  = parse(Float64, get(ENV, "ASPECT", "0.78"))
 SHARE_Y = get(ENV, "SHARE_Y", "0") != "0"
 LETTERS = get(ENV, "LETTERS", "0") != "0"
@@ -82,8 +82,8 @@ centre(d, k) = haskey(d, :cen) ? d.cen[k] : d.mean_b
 
 # named for the models, not "small/large": "Al_12" is the polynomial degree, so a
 # subscript would misread as a 12-atom cluster.  The parameter count is the size claim.
-rows = [(d = d12, label = get(ENV, "ROW1", "Al_12_4_6A_2_  (91 params)")),
-        (d = d16, label = get(ENV, "ROW2", "Al_16_4_6A_3_  (684 params)"))]
+rows = [(d = d12, label = get(ENV, "ROW1", "Al_12_4_6A_2_\n(91 params)")),
+        (d = d16, label = get(ENV, "ROW2", "Al_16_4_6A_3_\n(684 params)"))]
 
 for (i, r) in enumerate(rows)
     r.d.tags == ["unconstrained", "constrained"] ||

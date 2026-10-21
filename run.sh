@@ -6,6 +6,7 @@
 #   bash run.sh data [SOURCE]  bring in the 5 tier-B inputs (DFT data, ACE design matrices) from SOURCE
 #                              (default ../physics-informed-priors-repro) and check every SHA-256
 #   bash run.sh replot         every figure from the committed published results → repro/replot/  (minutes)
+#   bash run.sh figures ROUTE  redraw ROUTE's paper figures from its saved results, no recomputation   (minutes)
 #   bash run.sh saved          re-derive everything from the published fitted models → repro/saved/   (SLURM)
 #   bash run.sh refit          refit both ACE models and retrain MACE from the DFT data, then the same
 #                              chain on them → repro/refit/                                          (SLURM)
@@ -129,6 +130,20 @@ replot)
     OUT=$O "$PY" mace/pops/p6_maxdev_vs_error.py --replot
     echo "figures → $O/"
     ;;
+figures)
+    need_env
+    R=${2:?usage: bash run.sh figures saved|refit}; O=$REPO/repro/$R
+    [ -d "$O" ] || { echo "no $O: run bash run.sh $R first"; exit 1; }
+    AM=$REPO/models; [ "$R" = refit ] && AM=$O/models
+    export OUT=$O ACE_MODELS=$AM
+    $JL four_panel/plot_four_panel.jl
+    $JL -t "${THREADS:-8}" rls_npt/04_fig_200K.jl
+    $JL al12/03_replot_parity.jl
+    REPLOT_FROM=$O/mace "$PY" mace/4_compare.py --replot
+    REPLOT_FROM=$O/mace "$PY" mace/pops/p5_figures.py --replot
+    REPLOT_FROM=$O/mace "$PY" mace/pops/p6_maxdev_vs_error.py --replot
+    echo "figures → $O/"
+    ;;
 saved)  need_env; need_data; saved ;;
 refit)  need_env; need_data; refit ;;
 all)    need_env; need_data; saved; refit ;;
@@ -138,5 +153,5 @@ verify)
     { $JL verify/verify.jl "$R"; echo; "$PY" verify/verify_mace.py "$R"; } | tee "$REPO/repro/$R/VERIFY.md"
     ;;
 *)
-    sed -n 2,17p "$0"; exit 1 ;;
+    sed -n 2,19p "$0"; exit 1 ;;
 esac

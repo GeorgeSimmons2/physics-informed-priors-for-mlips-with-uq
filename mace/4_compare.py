@@ -29,7 +29,7 @@ if REPLOT:
     ROOT = os.environ.get("OUT", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "repro", "saved"))
     DIR, PREFIX = os.path.join(ROOT, "mace", "results"), ""
     os.makedirs(DIR, exist_ok=True)
-    z = np.load(os.path.join(os.path.dirname(HERE), "published", "mace", "results", "compare_data.npz"))
+    z = np.load(os.path.join(os.environ.get("REPLOT_FROM", os.path.join(os.path.dirname(HERE), "published", "mace")), "results", "compare_data.npz"))   # REPLOT_FROM: another route's mace/
 else:
     import lib
     DIR, PREFIX = lib.OUT, ""
@@ -85,7 +85,7 @@ open(os.path.join(DIR, f"{PREFIX}compare_elastic.txt"), "w").write(txt + "\n")
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-plt.rcParams.update({"font.size": 11, "axes.labelsize": 12, "xtick.labelsize": 10, "ytick.labelsize": 10})
+plt.rcParams.update({"font.size": 11, "axes.titlesize": 13, "axes.labelsize": 12, "xtick.labelsize": 11, "ytick.labelsize": 11, "legend.fontsize": 11})
 fig, axes = plt.subplots(2, 3, figsize=(7.08, 5.2))            # 7.08 in ≈ 510 pt, the MLST text width
 
 
@@ -95,8 +95,8 @@ def parity(ax, x, y, col, title, unit, r):
     ax.plot([lo - pad, hi + pad], [lo - pad, hi + pad], "k-", lw=0.8)
     ax.plot(x, y, ".", ms=2, alpha=0.4, color=col, rasterized=True)
     ax.set_xlim(lo - pad, hi + pad); ax.set_ylim(lo - pad, hi + pad)
-    ax.set_title(title, fontsize=11, loc="left")
-    ax.text(0.05, 0.95, f"RMSE\n{r:.1f} {unit}", transform=ax.transAxes, va="top", fontsize=10)
+    ax.set_title(title, loc="left")
+    ax.text(0.05, 0.95, f"RMSE\n{r:.1f} {unit}", transform=ax.transAxes, va="top")
 
 
 for ax, q, col, t in ((axes[0, 0], "e_before", C_BEFORE, "(a) MACE"), (axes[0, 1], "e_after", C_AFTER, "(b) constrained")):
@@ -110,25 +110,22 @@ ax = axes[0, 2]
 err_b, err_a = 1e3 * (z["e_before"] - z["e_dft"]), 1e3 * (z["e_after"] - z["e_dft"])
 lim = np.percentile(np.abs(np.concatenate([err_b, err_a])), 99.5)
 bins = np.linspace(-lim, lim, 51)
-ax.hist(err_b, bins=bins, color=C_BEFORE, alpha=0.55, label="MACE")
+nb, _, _ = ax.hist(err_b, bins=bins, color=C_BEFORE, alpha=0.55, label="MACE")
 ax.hist(err_a, bins=bins, histtype="step", lw=1.8, color=C_AFTER, label="constrained")
 ax.set_xlabel(r"$\Delta E$ (meV/atom)"); ax.set_ylabel("frames")
-ax.set_title("(c) energy errors", fontsize=11, loc="left")
-ax.legend(frameon=False, fontsize=8, loc="upper left", handlelength=1.2)
+ax.set_ylim(0, 1.6 * max(nb.max(), np.histogram(err_a, bins=bins)[0].max()))   # headroom for the legend
+ax.set_title("(c) energy errors", loc="left")
+ax.legend(frameon=False, loc="upper left", handlelength=1.2)
 
 ax = axes[1, 2]
 x, w = np.arange(len(KEYS)), 0.38
 ax.bar(x - w / 2, [C["before"][k] for k in KEYS], w, color=C_BEFORE, label="MACE")
 ax.bar(x + w / 2, [C["after"][k] for k in KEYS], w, color=C_AFTER, label="constrained")
 ax.plot(x, [TARGET[k] for k in KEYS], "k_", ms=14, mew=2.2, ls="none", label="target")
-for xi, k in zip(x, KEYS):
-    top = max(C["before"][k], C["after"][k], TARGET[k])
-    ax.text(xi, top + 3, f"{100 * (C['before'][k] / TARGET[k] - 1):+.0f}%\n→{100 * (C['after'][k] / TARGET[k] - 1):+.1f}%",
-            ha="center", va="bottom", fontsize=7, linespacing=1.05)
 ax.set_ylim(0, 1.65 * max(max(C[m][k] for m in C) for k in KEYS))
 ax.set_xticks(x, ["$C_{11}$", "$C_{12}$", "$C_{44}$", "$B$"]); ax.set_ylabel("GPa")
-ax.set_title("(f) elastic constants", fontsize=11, loc="left")
-ax.legend(frameon=False, fontsize=7.5, loc="upper right", handlelength=1.0, borderaxespad=0.2)
+ax.set_title("(f) $C_{ij}$ and $B$", loc="left")
+ax.legend(frameon=False, loc="upper right", handlelength=1.0, borderaxespad=0.2)
 for a in axes.flat:
     a.set_box_aspect(1)
 fig.tight_layout()

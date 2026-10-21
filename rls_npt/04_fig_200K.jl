@@ -61,9 +61,9 @@ end
 for x in M; @printf("%-16s a(200 K) = %.5f Å  ⟨coord⟩ = %.2f  min ω = %+.3f THz\n", x.lab, x.a, x.coord, x.mω); end
 
 # ── figure (styling as the paper figure) ─────────────────────────────────────
-FIGW = parse(Float64, get(ENV, "FIGW", "540"))
+FIGW = parse(Float64, get(ENV, "FIGW", "510"))
 BLU, RED, ORA = RGBf(0.0, 0.447, 0.698), RGBf(0.80, 0.15, 0.15), RGBf(0.835, 0.369, 0.0)
-TITLE, SUB, LAB, TICK, SMALL = 13, 12, 12, 11, 10
+TITLE, SUB, LAB, TICK, SMALL = 13, 13, 12, 11, 11
 fig = Figure(size=(FIGW, 0.66FIGW), figure_padding=(6, 10, 4, 6))
 
 ax1 = Axis(fig[1:2, 1]; xlabel="Wave vector", ylabel="Frequency (THz)", title="Phonon dispersion at a($(T_K) K)",

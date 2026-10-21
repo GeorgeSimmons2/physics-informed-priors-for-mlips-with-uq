@@ -96,7 +96,7 @@ println("\n── dispersion: actual members vs hypercube draws ──")
 @printf("  → sampled/actual median ω_max ratio = %.2f\n", median(hi_s)/median(hi_a))
 flush(stdout)
 
-FIGW = parse(Float64, get(ENV, "FIGW", "540"))
+FIGW = parse(Float64, get(ENV, "FIGW", "510"))
 BLU = RGBf(0.0, 0.447, 0.698); GRY = RGBAf(0.45, 0.45, 0.45, 0.35)
 TITLE, LAB, TICK = 13, 12, 11
 

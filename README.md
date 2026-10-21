@@ -26,12 +26,21 @@ bash run.sh setup     # .venv/ (requirements.txt) and Julia (Manifest.toml) in a
 bash run.sh data      # the tier-B inputs from ../physics-informed-priors-repro (or: bash run.sh data <dir>), SHA-256 checked
 bash run.sh replot    # every figure from the committed results in published/ → repro/replot/                ~5 min
 bash run.sh all       # SLURM: the saved and refit routes below → repro/saved/, repro/refit/
+bash run.sh figures saved   # redraw a finished route's paper figures from its saved results (no recomputation) ~5 min
 bash run.sh verify saved && bash run.sh verify refit     # → repro/<route>/VERIFY.md   (last full run: VERIFICATION.md)
 ```
 
 You need `julia` 1.11 on PATH (the Manifest was resolved with 1.11.8), `python3` 3.9 and SLURM.
 The partition is `PARTITION` (default `compute`). Every job fits on one 48-core node with
 about 170 GB of memory.
+
+## Figures
+
+The paper figures are built at the width they are placed at in the manuscript, so no scaling
+happens in LaTeX: full width 510 pt (`FIGW`), half width 255 pt. Text sizes are the same in all of
+them: titles and panel letters 13 pt, axis labels 12 pt, ticks, legends and in-panel text 11 pt.
+Those figures are the four-panel, fig_200K, the Al_12 parity/calibration plots and the MACE
+before/after and POPS figures.
 
 ## Two routes
 
@@ -134,6 +143,7 @@ al12/01_committee.jl         constrained mean θ_mean and the 30-member repaired
 al12/02_cutting_plane_cloud.jl  cut the whole top-leverage cloud (73,479 members) until stable
 al12/03_hypercube_rejection.jl  hypercube around the cloud, rejection sampling, parity/calibration
                              (run again with 600 members by the al12_03_noise job, for verify)
+al12/03_replot_parity.jl     redraw al12/03's parity/calibration figures from its saved predictions
 al12/04_naive_ensemble.jl    the unconstrained (naive) ensemble; min ω and relaxed a of both ensembles
 al16/01_pinned_ensembles.jl  pinned hypercube: unconstrained and rejection-sampled ensembles
 al16/02_bands.jl             native relaxation + Hessian per member → Al_16 four-panel cache

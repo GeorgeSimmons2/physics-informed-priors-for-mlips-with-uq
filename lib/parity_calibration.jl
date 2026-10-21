@@ -65,12 +65,12 @@ function pc_calib!(ax, t, p, spread)
 end
 
 """
-    parity_figure(pr, ttl, tag, outdir; FIGW=540.0)
+    parity_figure(pr, ttl, tag, outdir; FIGW=510.0)
 
 DFT vs ACE with committee error bars: (a) energy, (b) force.  `pr` is a
 committee_predictions result.  Writes `\$outdir/parity_\$(tag).{pdf,png}`.
 """
-function parity_figure(pr, ttl, tag, outdir; FIGW=540.0)
+function parity_figure(pr, ttl, tag, outdir; FIGW=510.0)
     pa = pc_per_atom(pr)
     eax = pa ? "energy (eV/atom)" : "energy (eV)"
     fig = Figure(size=(FIGW, 0.60FIGW), figure_padding=(6, 10, 4, 6))
@@ -97,12 +97,12 @@ function parity_figure(pr, ttl, tag, outdir; FIGW=540.0)
 end
 
 """
-    calibration_figure(pr, ttl, tag, outdir; FIGW=540.0)
+    calibration_figure(pr, ttl, tag, outdir; FIGW=510.0)
 
 Test error vs ensemble spread, log density: (a) energy, (b) force.  Writes
 `\$outdir/calibration_\$(tag).{pdf,png}`.
 """
-function calibration_figure(pr, ttl, tag, outdir; FIGW=540.0)
+function calibration_figure(pr, ttl, tag, outdir; FIGW=510.0)
     fig = Figure(size=(FIGW, 0.58FIGW), figure_padding=(6, 10, 4, 6))
     Label(fig[1, 1:2], ttl; fontsize=PC_TICK, padding=(0, 0, 0, 2))
     # LineElement rather than plot handles: assignments inside the loop below do not

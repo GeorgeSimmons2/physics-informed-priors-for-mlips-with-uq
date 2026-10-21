@@ -7,7 +7,7 @@ error some member reaches: a DFT value inside the committee's min–max range (p
 The uncertainty here is that deviation, not the committee σ of p4 and p5 (both left unchanged).
 
   maxdev_test.txt                                   coverage (fraction with |error| ≤ deviation toward DFT) per committee
-  maxdev_vs_error_{E,F}_{constrained,unconstrained}  one PDF and PNG each, 3.45 in square; both axes run to the
+  maxdev_vs_error_{E,F}_{constrained,unconstrained}  one PDF and PNG each, 255 pt square; both axes run to the
                                                     99.5th percentile, and the points beyond are counted on the panel
   maxdev_data.npz                                   y, reference prediction and deviation toward DFT, for --replot
 In:  $OUT/mace/pops/rows/rows_test.npz (p1), $OUT/mace/pops/committee_*.csv (p3), $OUT/mace/results/theta*.csv
@@ -30,7 +30,7 @@ PREFIX = ""
 NAMES = ("constrained", "unconstrained")
 
 if REPLOT:
-    d = dict(np.load(os.path.join(os.path.dirname(os.path.dirname(HERE)), "published", "mace", "pops", "maxdev_data.npz")))
+    d = dict(np.load(os.path.join(os.environ.get("REPLOT_FROM", os.path.join(os.path.dirname(os.path.dirname(HERE)), "published", "mace")), "pops", "maxdev_data.npz")))   # REPLOT_FROM: a route's mace/
 else:
     load = lambda f: np.loadtxt(f, delimiter=",")
     MAIN = os.path.join(ROOT, "mace", "results")
@@ -53,9 +53,8 @@ else:
     open(os.path.join(OUT, "maxdev_test.txt"), "w").write(txt + "\n")
     np.savez(os.path.join(OUT, "maxdev_data.npz"), **d)
 
-W = 3.45
-plt.rcParams.update({"font.size": 11, "axes.labelsize": 11, "xtick.labelsize": 10, "ytick.labelsize": 10,
-                     "legend.fontsize": 9, "axes.titlesize": 11})
+W = 255 / 72                                    # half the MLST text width (510 pt), in inches
+plt.rcParams.update({"font.size": 11, "axes.titlesize": 13, "axes.labelsize": 12, "xtick.labelsize": 11, "ytick.labelsize": 11, "legend.fontsize": 11})
 COL = {"constrained": "C0", "unconstrained": "C1"}
 UNIT = {"E": "meV/atom", "F": "meV/Å"}
 BOX = dict(facecolor="white", edgecolor="none", alpha=0.85, pad=1.5)
@@ -72,7 +71,7 @@ for name in NAMES:
         ax.set_xlabel(f"|error| ({UNIT[q]})"); ax.set_ylabel(f"deviation toward DFT ({UNIT[q]})")
         ax.text(0.05, 0.95, f"covered: {100 * np.mean(m >= e):.0f}%", transform=ax.transAxes, va="top", bbox=BOX)
         ax.text(0.05, 0.86, f"{np.sum((e > lim) | (m > lim))} of {len(e)} beyond the axes", transform=ax.transAxes,
-                va="top", fontsize=8, color="0.4", bbox=BOX)
+                va="top", color="0.4", bbox=BOX)
         fig.tight_layout()
         for ext in ("pdf", "png"):
             fig.savefig(os.path.join(OUT, f"{PREFIX}maxdev_vs_error_{q}_{name}.{ext}"), dpi=300)

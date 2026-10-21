@@ -1,6 +1,6 @@
 """
 p5. Figures from eval_data.npz (p4), each its own PDF and PNG, built at half the MLST text width
-(3.45 in ≈ 250 pt) with 10–12 pt text so they drop in two to a row without rescaling.
+(255 pt) with 11–13 pt text so they drop in two to a row without rescaling.
 
   parity_{E,F}_{constrained,unconstrained}       reference model vs DFT, ±σ of its committee, RMSE printed
   uncertainty_vs_error_{E,F}_{constrained,unconstrained}   |error| of the reference model vs committee σ,
@@ -23,12 +23,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPLOT = "--replot" in sys.argv
 ROOT = os.environ.get("OUT", os.path.join(os.path.dirname(os.path.dirname(HERE)), "repro", "saved"))   # the route root
 OUT = os.path.join(ROOT, "mace", "pops"); os.makedirs(OUT, exist_ok=True)
-SRC = os.path.join(os.path.dirname(os.path.dirname(HERE)), "published", "mace", "pops") if REPLOT else OUT
+SRC = os.path.join(os.environ.get("REPLOT_FROM", os.path.join(os.path.dirname(os.path.dirname(HERE)), "published", "mace")), "pops") if REPLOT else OUT   # REPLOT_FROM: a route's mace/
 PREFIX = ""
 d = np.load(os.path.join(SRC, "eval_data.npz"))
-W = 3.45
-plt.rcParams.update({"font.size": 11, "axes.labelsize": 11, "xtick.labelsize": 10, "ytick.labelsize": 10,
-                     "legend.fontsize": 9, "axes.titlesize": 11})
+W = 255 / 72                                    # half the MLST text width (510 pt), in inches
+plt.rcParams.update({"font.size": 11, "axes.titlesize": 13, "axes.labelsize": 12, "xtick.labelsize": 11, "ytick.labelsize": 11, "legend.fontsize": 11})
 COL = {"constrained": "C0", "unconstrained": "C1"}
 LABEL = {"constrained": "constrained", "unconstrained": "MACE"}
 UNIT = {"E": ("eV/atom", "meV/atom"), "F": ("eV/Å", "meV/Å")}
@@ -107,8 +106,7 @@ for ax, (n, key, ref) in zip(axes.flat, ((2, "$a_0$ (Å)", 4.032), (3, "$C_{11}$
         ax.axhspan(ref * (1 - TOL), ref * (1 + TOL), color="k", alpha=0.25, lw=0)
     ax.axhline(ref, color="k", lw=0.7)
     ax.set_xticks([0, 1], ["constr.", "MACE"]); ax.set_xlim(-0.6, 1.6)
-    ax.set_title(key, fontsize=10)
-    ax.tick_params(labelsize=9)
+    ax.set_title(key)
 fig.tight_layout(rect=(0, 0.03, 1, 1))
 for ext in ("pdf", "png"):
     fig.savefig(os.path.join(OUT, f"{PREFIX}cij_spread.{ext}"), dpi=300)
