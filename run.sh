@@ -1,22 +1,21 @@
 #!/bin/bash
-# run.sh — reproduce the three results of this repository.
+# run.sh — reproduce the paper's figures.
 #
-#   bash run.sh setup          a fresh environment: .venv/ from requirements.txt, and the Julia environment
-#                              (Project.toml + Manifest.toml) in a repo-local depot .julia/   (~40 min, once)
-#   bash run.sh data [SOURCE]  bring in the 5 tier-B inputs (DFT data, ACE design matrices) from SOURCE
-#                              (default ../physics-informed-priors-repro) and check every SHA-256
-#   bash run.sh replot         every figure from the committed published results → repro/replot/  (minutes)
-#   bash run.sh figures ROUTE  redraw ROUTE's paper figures from its saved results, no recomputation   (minutes)
-#   bash run.sh saved          re-derive everything from the published fitted models → repro/saved/   (SLURM)
-#   bash run.sh refit          refit both ACE models and retrain MACE from the DFT data, then the same
-#                              chain on them → repro/refit/                                          (SLURM)
+#   bash run.sh setup          .venv/ from requirements.txt and the Julia environment (Manifest.toml) in a
+#                              repo-local depot .julia/                                              (~40 min, once)
+#   bash run.sh data [SOURCE]  the tier-B inputs (DFT data, ACE design matrices) from SOURCE
+#                              (default ../physics-informed-priors-repro), SHA-256 checked
+#   bash run.sh replot         every figure from the results in published/ → repro/replot/            (minutes)
+#   bash run.sh saved          recompute everything from the published fitted models → repro/saved/   (SLURM)
+#
+# Extras:
+#   bash run.sh refit          refit both ACE models and retrain MACE from the DFT data first → repro/refit/ (SLURM)
 #   bash run.sh all            saved and refit together
-#   bash run.sh verify ROUTE   compare repro/ROUTE (saved | refit) with published/ → repro/ROUTE/VERIFY.md
+#   bash run.sh figures ROUTE  redraw a finished route's figures from its results                     (minutes)
 #
-# Every route writes only under repro/<route>/ (and model-specific Hessian caches beside each model), so
-# published/ is never touched.  A route directory that already exists is refused unless FORCE=1.
-# Env: PARTITION (compute), JULIA_DEPOT_PATH (default .julia/), FORCE.  Every job fits one 48-core, ~170 GB node;
-# the requests are about twice the peak memory measured for each stage (largest: the hypercube, 43 GB).
+# A route writes only under repro/<route>/ (and Hessian caches beside each model), and refuses to overwrite an
+# existing one unless FORCE=1.  Env: PARTITION (compute), JULIA_DEPOT_PATH (default .julia/), FORCE.  Every job
+# fits one 48-core, ~170 GB node.
 set -euo pipefail
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$REPO"
@@ -41,14 +40,10 @@ route() {
     local E="OUT=$O,ACE_MODELS=$AM,MODEL_FILE=$MF"
     local T='-t $SLURM_NTASKS'
     # Al_12: in sequence — 01 builds the 4×4×4 undotted Hessian cache the next three read
-    local c1 c2 c3 c3n c4 c5 d1 d2 f4 r1 n1 n2 f2 m1 m2 p1 p2 p3 p4
+    local c1 c2 c3 c4 c5 d1 d2 f4 r1 n1 n2 f2 m1 m2 p1 p2 p3 p4
     c1=$(sub "${N}_al12_01" "$AD" "$PART" 20 3988 06:00:00 "$E" "$JL $T al12/01_committee.jl")
     c2=$(sub "${N}_al12_02" "$c1" "$PART" 42 3988 04:00:00 "$E" "$JL $T al12/02_cutting_plane_cloud.jl")
     c3=$(sub "${N}_al12_03" "$c2" "$PART" 8 12000 04:00:00 "$E" "$JL $T al12/03_hypercube_rejection.jl")
-    # verify's yardstick for the committees' test coverage: al12/03 again with 600 members (its first 30 are the
-    # committee above), scored as 20 disjoint 30-member committees
-    c3n=$(sub "${N}_al12_03_noise" "$c3" "$PART" 8 12000 02:00:00 "$E,OUTDIR=$O/al12/hypercube_noise" \
-          "$JL $T al12/03_hypercube_rejection.jl 600 20 && $JL verify/coverage_noise.jl $O/al12/hypercube_noise/parity_calibration_predictions.jls data/Al/manual_df_test_Al.xyz $O/al12/hypercube_noise/coverage_noise.csv")
     c4=$(sub "${N}_al12_04" "$c3" "$PART" 40 3988 08:00:00 "$E" "$JL $T al12/04_naive_ensemble.jl")
     # Al_16
     d1=$(sub "${N}_al16_01" "$AD" "$PART" 40 3988 06:00:00 "$E,BUILD_THREADS=16" "$JL $T al16/01_pinned_ensembles.jl")
@@ -75,8 +70,8 @@ route() {
     p2=$(sub "${N}_pops_cloud" "$p1:$m1" "$PART" 16 2000 06:00:00 "$ME" "$PY mace/pops/p1b_export_csv.py && $JL $T mace/pops/p2_cloud.jl")
     p3=$(sub "${N}_pops_sample" "$p2" "$PART" 4 2000 02:00:00 "$ME" "$JL mace/pops/p3_sample.jl")
     p4=$(sub "${N}_pops_eval" "$p3" "$PART" 16 2000 06:00:00 "$ME" \
-         "$PY mace/pops/p4_evaluate.py && $PY mace/pops/p5_figures.py && $PY mace/pops/p6_maxdev_vs_error.py")
-    echo "$N: Al_12 $c1→$c2→$c3(+noise $c3n)→$c4→$c5 | Al_16 $d1→$d2 | four-panel $f4 | RLS $r1, NPT $n1 $n2 → fig $f2"
+         "$PY mace/pops/p4_evaluate.py && $PY mace/pops/p5_figures.py")
+    echo "$N: Al_12 $c1→$c2→$c3→$c4→$c5 | Al_16 $d1→$d2 | four-panel $f4 | RLS $r1, NPT $n1 $n2 → fig $f2"
     echo "$N: MACE $m1→$m2 | POPS $p1→$p2→$p3→$p4      logs: $LOG/"
 }
 
@@ -125,9 +120,10 @@ replot)
     OUT=$O SRC12=$REPO/published/al12/naive/bands_four_panel_Al_12.jls SRC16=$REPO/published/al16/bands/bands_two_ensembles.jls \
         $JL four_panel/plot_four_panel.jl
     OUT=$O NPT=$REPO/published/rls_npt/npt $JL -t "${THREADS:-8}" rls_npt/04_fig_200K.jl
+    mkdir -p "$O/al12/hypercube"; cp "$REPO/published/al12/hypercube/parity_calibration_predictions.jls" "$O/al12/hypercube/"
+    OUT=$O $JL al12/03_replot_parity.jl
     OUT=$O "$PY" mace/4_compare.py --replot
     OUT=$O "$PY" mace/pops/p5_figures.py --replot
-    OUT=$O "$PY" mace/pops/p6_maxdev_vs_error.py --replot
     echo "figures → $O/"
     ;;
 figures)
@@ -141,17 +137,11 @@ figures)
     $JL al12/03_replot_parity.jl
     REPLOT_FROM=$O/mace "$PY" mace/4_compare.py --replot
     REPLOT_FROM=$O/mace "$PY" mace/pops/p5_figures.py --replot
-    REPLOT_FROM=$O/mace "$PY" mace/pops/p6_maxdev_vs_error.py --replot
     echo "figures → $O/"
     ;;
 saved)  need_env; need_data; saved ;;
 refit)  need_env; need_data; refit ;;
 all)    need_env; need_data; saved; refit ;;
-verify)
-    need_env
-    R=${2:?usage: bash run.sh verify saved|refit}
-    { $JL verify/verify.jl "$R"; echo; "$PY" verify/verify_mace.py "$R"; } | tee "$REPO/repro/$R/VERIFY.md"
-    ;;
 *)
-    sed -n 2,19p "$0"; exit 1 ;;
+    sed -n 2,18p "$0"; exit 1 ;;
 esac

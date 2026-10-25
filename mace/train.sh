@@ -10,7 +10,7 @@
 # Output: $OUT/mace/models/Al_small_stagetwo.model, the final stage-two (SWA) model every later step uses,
 # and $OUT/mace/train/ (MACE's logs, per-step results, checkpoints).  Bit-identical weights are not
 # guaranteed across hardware or thread counts (floating-point reduction order): compare the error tables
-# in the log with mace/models/train_log.txt, and the downstream results statistically (run.sh verify).
+# in the log with mace/models/train_log.txt.
 set -euo pipefail
 D=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 OUT=${OUT:-$(dirname "$D")/repro/saved}

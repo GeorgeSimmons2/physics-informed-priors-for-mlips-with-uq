@@ -1,3 +1,3 @@
 cloud,n_members,n_directions,width_mean,width_max,acceptance_pct,E_coverage_pct,F_coverage_pct,E_rmse_eV_per_atom,F_rmse_eV_per_A
-full_cloud,73404,63,0.550686,16.4874,10.4895,90.127,97.525,0.194981,0.40581
-forest_30,30,30,0.398256,7.76632,28.5714,52.446,71.694,0.194981,0.40581
+full_cloud,73390,63,0.560588,15.4356,7.1770,92.391,98.480,0.195894,0.405157
+forest_30,30,30,0.388289,7.40328,32.2581,52.446,71.185,0.195894,0.405157

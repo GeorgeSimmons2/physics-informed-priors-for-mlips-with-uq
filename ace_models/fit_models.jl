@@ -7,7 +7,7 @@
 # force rows), weights E 30 / F 1, with ACEpotentials' smoothness prior P and the regularised
 # solve θ = P⁻¹ (ÃᵀÃ + PᵀP/N)⁻¹ Ãᵀ ỹ of build_model (src/Models/Models.jl).  The fit is
 # deterministic: with the pinned package versions it reproduces the published models' coefficients
-# up to floating-point summation order, which verify.jl checks.
+# up to floating-point summation order.
 #
 # Out: $ACE_MODELS/<name>_/{<name>.json, A.csv, Y.csv, P.csv, W.csv, lin_params.csv}
 # Run: ACE_MODELS=<dir> julia --project ace_models/fit_models.jl [12] [16]      Env: NPROCS (8)

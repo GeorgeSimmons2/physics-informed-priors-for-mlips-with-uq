@@ -3,9 +3,6 @@ p5. Figures from eval_data.npz (p4), each its own PDF and PNG, built at half the
 (255 pt) with 11–13 pt text so they drop in two to a row without rescaling.
 
   parity_{E,F}_{constrained,unconstrained}       reference model vs DFT, ±σ of its committee, RMSE printed
-  uncertainty_vs_error_{E,F}_{constrained,unconstrained}   |error| of the reference model vs committee σ,
-                                                  with |error| = σ and 2σ, and the binned RMS error
-  calibration_{E,F}                              observed vs expected fraction with |error| ≤ zσ, both committees
   cij_spread                                     a0, C11, C12, C44 of every member, both reference models marked
 Run: python3 p5_figures.py             from $OUT/mace/pops/eval_data.npz, figures beside it
      python3 p5_figures.py --replot    from published/mace/pops/eval_data.npz, figures to $OUT/mace/pops
@@ -17,7 +14,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import norm
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPLOT = "--replot" in sys.argv
@@ -60,36 +56,6 @@ for name in COL:
         ax.set_xlabel(f"${SYM[q]}_\\mathrm{{DFT}}$ ({UNIT[q][0]})"); ax.set_ylabel(f"${SYM[q]}$, {LABEL[name]} ({UNIT[q][0]})")
         ax.text(0.05, 0.95, f"RMSE {rmse:.1f} {UNIT[q][1]}", transform=ax.transAxes, va="top")
         save(fig, f"parity_{q}_{name}")
-        # uncertainty vs error, log–log, in meV
-        e, s = 1e3 * np.abs(f - y), 1e3 * sd
-        fig, ax = plt.subplots(figsize=(W, W))
-        ax.loglog(s, np.maximum(e, 1e-3), ".", ms=2, alpha=0.3, color=COL[name], rasterized=True)
-        lo, hi = np.percentile(s, 0.1) / 3, max(np.percentile(s, 99.9), np.percentile(e, 99.9)) * 3
-        xs = np.geomspace(lo, hi, 50)
-        ax.loglog(xs, xs, "k-", lw=0.8, label="|error| = σ")
-        ax.loglog(xs, 2 * xs, "k--", lw=0.8, label="|error| = 2σ")
-        edges = np.quantile(s, np.linspace(0, 1, 16))
-        idx = np.clip(np.digitize(s, edges[1:-1]), 0, 14)
-        bs = [s[idx == b].mean() for b in range(15)]
-        be = [np.sqrt(np.mean(e[idx == b] ** 2)) for b in range(15)]
-        ax.loglog(bs, be, "o-", color="k", ms=3, lw=1.2, mfc=COL[name], label="binned RMS error")
-        ax.set_xlim(lo, hi); ax.set_ylim(lo, hi); ax.set_aspect("equal")
-        ax.set_xlabel(f"committee σ ({UNIT[q][1]})"); ax.set_ylabel(f"|error| ({UNIT[q][1]})")
-        ax.legend(frameon=False, loc="upper left")
-        save(fig, f"uncertainty_vs_error_{q}_{name}")
-
-zs = np.linspace(0, 3.5, 71)
-for q in ("E", "F"):
-    fig, ax = plt.subplots(figsize=(W, W))
-    for name in COL:
-        y, f, sd = get(name, q)
-        z = np.abs(f - y) / np.maximum(sd, 1e-12)
-        ax.plot(2 * norm.cdf(zs) - 1, [np.mean(z <= zz) for zz in zs], color=COL[name], lw=2, label=LABEL[name])
-    ax.plot([0, 1], [0, 1], "k--", lw=0.8)
-    ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.set_aspect("equal")
-    ax.set_xlabel("expected fraction"); ax.set_ylabel(f"observed fraction ({SYM[q]})")
-    ax.legend(frameon=False, loc="upper left")
-    save(fig, f"calibration_{q}")
 
 cij = d["cij"]
 TOL = 1e-3
