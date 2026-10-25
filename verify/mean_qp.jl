@@ -1,14 +1,4 @@
 # verify/mean_qp.jl — judge the Al_12 constrained mean θ_mean on what it predicts, at the method's own precision.
-#
-# θ_mean solves one strictly convex QP (al12/01: the fit, b′·θ = 0 and the Born rows, in x = Pθ; no phonon cuts
-# at a_eq).  OSQP at eps 1e-6 stops near-optimal in objective but essentially arbitrarily along the QP's flat
-# directions: the published θ_mean is itself ~80% (in θ) from the exact optimum and 3.7e-5 short of it in objective.
-# Raw ‖Δθ‖ therefore says nothing, and the yardstick is the published solution's own distance from the exact
-# optimum (closed-form KKT; the Born rows are inactive): a rerun reproduces θ_mean if it is at least as close to the
-# published θ_mean as that, both in the weighted training predictions and in the phonon bands, and satisfies the
-# constraints (b′·θ = 0, Born, min ω ≥ the 0.15 THz cut margin).
-#
-# Included by verify.jl; needs the route's models (ACE_MODELS) and the undotted-Hessian cache al12/01 left there.
 
 include(joinpath(@__DIR__, "..", "lib", "bandpath.jl"))
 
@@ -39,8 +29,8 @@ function check_mean_qp(label, published, reproduced; cut_margin=0.15, N_per_seg=
 end
 
 # The constrained RLS θ (rls_npt/01): the same objective and flat directions as θ_mean plus a cutting-plane set
-# over six volumes, which is path dependent, so there is no single exact optimum to anchor to.  It is judged at
-# the converged tier's 1e-2 — on its weighted training predictions (well conditioned), not on raw θ (not).
+# over six volumes.  It is judged at the converged tier's 1e-2 — on its weighted training predictions (well
+# conditioned), not on raw θ (not).
 # Its per-volume phonons are in the stage's log; its consequence, the 200 K NPT, is judged on its own.
 function check_predictions(label, published, reproduced; tol=1e-2)
     (isfile(published) && isfile(reproduced)) || return Check(label, :converged, :missing, "not produced yet: $reproduced")
