@@ -1,5 +1,20 @@
 # Verification: a fresh rebuild of everything, 15–16 Oct 2026
 
+## Update, 25 Oct 2026: constrained RLS at OSQP eps 1e-8
+
+`rls_npt/01_constrained_rls.jl` now solves its QPs at eps 1e-8 (was 1e-6). The published constrained RLS θ,
+its 200 K NPT and `fig_200K` were regenerated from it on the saved route; the RLS model's NPT is unchanged.
+The constrained-RLS rows in the 15–16 Oct record below compare against the previous θ.
+
+| constrained RLS | eps 1e-6 (previous) | eps 1e-8 (published now) |
+|---|---|---|
+| weighted RMSE | 2.43300 | 2.43288 |
+| min ω at a₀ (THz) | +0.406 | +0.423 |
+| a(200 K) (Å) | 4.08421 ± 0.00481 | 4.08161 ± 0.00476 |
+| expansion | +0.971% | +0.907% |
+| ⟨coord⟩, still FCC | 12.00, yes | 12.00, yes |
+| min ω at a(200 K), dense path (THz) | +0.235 | +0.248 |
+
 Produced by `bash run.sh setup && bash run.sh data && bash run.sh all`, then `bash run.sh verify saved|refit`.
 - **Code:** commit `2017593` of this repository (this file was added after the runs).
 - **Environment:** a fresh `.venv/` and a fresh repo-local Julia depot.

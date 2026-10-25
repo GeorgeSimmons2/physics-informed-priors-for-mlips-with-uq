@@ -34,13 +34,13 @@ minω(θ) = [min_freq_stable(θ, bp) for bp in bps]
 osqp = OSQP.Model(); Hqp = sparse(Ap'*Ap .+ λ.*(P'*P)); qqp = -(Ap'*Yw)
 function fit(rows, lower)
     A = vcat(sparse(b_prime'/P), sparse(rows/P)); l = vcat(0.0, lower); u = vcat(0.0, fill(Inf, length(lower)))
-    OSQP.setup!(osqp; P=Hqp, q=qqp, A=A, l=l, u=u, max_iter=4_000_000, adaptive_rho_interval=25,
-                verbose=false, eps_abs=1e-6, eps_rel=1e-6)
+    OSQP.setup!(osqp; P=Hqp, q=qqp, A=A, l=l, u=u, max_iter=1_000_000, adaptive_rho_interval=25,
+                verbose=false, eps_abs=1e-8, eps_rel=1e-8)
     P \ OSQP.solve!(osqp).x
 end
 rows, lower = born_rows, born_lower
 θ_con = fit(rows, lower)
-for it in 1:80
+for it in 1:1000
     global θ_con, rows, lower
     soft = [(v, iq, e) for v in eachindex(bps) for (iq, e) in soft_modes(θ_con, bps[v], ω2_cut)]
     isempty(soft) && break

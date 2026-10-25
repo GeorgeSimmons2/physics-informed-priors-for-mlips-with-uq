@@ -73,10 +73,6 @@ precision of the method, it is measured, not assumed:
   - So `verify/mean_qp.jl` requires a rerun to be at least that close to the published θ_mean, in
     predictions and bands, with every constraint holding. Raw ‖Δθ‖ says nothing here.
   - The exact optimum fits 1% better and is also stable.
-- **Cutting-plane cascades.**
-  - OSQP's ρ schedule is pinned (`adaptive_rho_interval = 25`), so one QP follows one path.
-  - A cascade can still end on a different but equally valid member. So member identities are not
-    reproducible; the committee statistics are.
 - **Hypercube draws.**
   - A draw has no QP in it, but it goes through the PCA of a numerically rank-deficient cloud
     (439 of 684 directions kept for Al_16).

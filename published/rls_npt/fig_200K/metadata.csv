@@ -5,4 +5,4 @@
 # RLS left FCC at 200 K: its a_200K is cube-root(V)/4 of a transformed cell, not an FCC lattice constant
 model,a0_Ang,a_200K_Ang,a_200K_std_Ang,expansion_pct,mean_coord,still_fcc,min_omega_THz,theta_file
 RLS,4.044936,4.242527,0.006983,4.885,9.4644,false,-4.0636,../npt/rls/theta_used.csv
-constrained RLS,4.044936,4.084205,0.004808,0.971,11.9968,true,0.2346,../npt/constrained/theta_used.csv
+constrained RLS,4.044936,4.081610,0.004763,0.907,11.9980,true,0.2484,../npt/constrained/theta_used.csv
