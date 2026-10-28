@@ -7,6 +7,7 @@
 #                              (default ../physics-informed-priors-repro), SHA-256 checked
 #   bash run.sh replot         every figure from the results in published/ → repro/replot/            (minutes)
 #   bash run.sh saved          recompute everything from the published fitted models → repro/saved/   (SLURM)
+#   bash run.sh test           unit tests of src/, lib/ and the scripts' functions, and the replot regression (~25 min)
 #
 # Extras:
 #   bash run.sh refit          refit both ACE models and retrain MACE from the DFT data first → repro/refit/ (SLURM)
@@ -14,8 +15,8 @@
 #   bash run.sh figures ROUTE  redraw a finished route's figures from its results                     (minutes)
 #
 # A route writes only under repro/<route>/ (and Hessian caches beside each model), and refuses to overwrite an
-# existing one unless FORCE=1.  Env: PARTITION (compute), JULIA_DEPOT_PATH (default .julia/), FORCE.  Every job
-# fits one 48-core, ~170 GB node.
+# existing one unless FORCE=1.  Env: PARTITION (compute), JULIA_DEPOT_PATH (default .julia/), FORCE, REPLOT_OUT
+# (replot's output, default repro/replot).  Every job fits one 48-core, ~170 GB node.
 set -euo pipefail
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$REPO"
@@ -116,7 +117,7 @@ data)
     ;;
 replot)
     need_env
-    O=$REPO/repro/replot; mkdir -p "$O"
+    O=${REPLOT_OUT:-$REPO/repro/replot}; mkdir -p "$O"
     OUT=$O SRC12=$REPO/published/al12/naive/bands_four_panel_Al_12.jls SRC16=$REPO/published/al16/bands/bands_two_ensembles.jls \
         $JL four_panel/plot_four_panel.jl
     OUT=$O NPT=$REPO/published/rls_npt/npt $JL -t "${THREADS:-8}" rls_npt/04_fig_200K.jl
@@ -139,9 +140,23 @@ figures)
     REPLOT_FROM=$O/mace "$PY" mace/pops/p5_figures.py --replot
     echo "figures → $O/"
     ;;
+test)
+    need_env; need_data
+    T=$(mktemp -d "${TMPDIR:-/tmp}/repro_test_XXXXXX"); trap 'rm -rf "$T"' EXIT
+    st=0
+    echo "── Julia: src/, lib/ and the scripts' functions"
+    $JL -t "${THREADS:-8}" test/runtests.jl || st=1
+    echo "── Python: mace/lib.py and the mace/ scripts' functions"
+    "$PY" test/python/run.py || st=1
+    echo "── replot regression: the figures from published/ are the published ones"
+    { REPLOT_OUT=$T bash "$REPO/run.sh" replot >"$T/replot.log" 2>&1 || { tail -20 "$T/replot.log"; false; }; } &&
+        "$PY" test/replot/check_replot.py "$T" || st=1
+    [ $st = 0 ] && echo "all tests pass" || echo "TESTS FAILED"
+    exit $st
+    ;;
 saved)  need_env; need_data; saved ;;
 refit)  need_env; need_data; refit ;;
 all)    need_env; need_data; saved; refit ;;
 *)
-    sed -n 2,18p "$0"; exit 1 ;;
+    sed -n 2,19p "$0"; exit 1 ;;
 esac

@@ -35,6 +35,7 @@ bash run.sh setup     # .venv/ and a repo-local Julia depot .julia/             
 bash run.sh data      # the tier-B inputs from ../physics-informed-priors-repro, SHA-256 checked
 bash run.sh replot    # every figure from published/ → repro/replot/                      minutes
 bash run.sh saved     # recompute everything from the published fitted models → repro/saved/   SLURM
+bash run.sh test      # unit tests (src/, lib/, every function the scripts define) + replot regression  ~25 min
 ```
 
 Needs `julia` 1.11, `python3` 3.9 and SLURM (`PARTITION`, default `compute`). Every job fits on one
